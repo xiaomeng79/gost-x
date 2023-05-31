@@ -6,6 +6,7 @@ import (
 
 	mdata "github.com/go-gost/core/metadata"
 	mdutil "github.com/go-gost/core/metadata/util"
+	"github.com/go-gost/x/handler/common"
 )
 
 const (
@@ -17,6 +18,7 @@ type metadata struct {
 	header          http.Header
 	hash            string
 	authBasicRealm  string
+	common.Metadata
 }
 
 func (h *http2Handler) parseMetadata(md mdata.Metadata) error {

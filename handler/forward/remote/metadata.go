@@ -5,12 +5,14 @@ import (
 
 	mdata "github.com/go-gost/core/metadata"
 	mdutil "github.com/go-gost/core/metadata/util"
+	"github.com/go-gost/x/handler/common"
 )
 
 type metadata struct {
 	readTimeout     time.Duration
 	sniffing        bool
 	sniffingTimeout time.Duration
+	common.Metadata
 }
 
 func (h *forwardHandler) parseMetadata(md mdata.Metadata) (err error) {

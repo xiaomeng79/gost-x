@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-gost/core/auth"
 	"github.com/go-gost/core/chain"
 	"github.com/go-gost/core/handler"
 	"github.com/go-gost/core/listener"
@@ -133,7 +134,8 @@ func (h *relayHandler) Handle(ctx context.Context, conn net.Conn, opts ...handle
 		"remote": conn.RemoteAddr().String(),
 		"local":  conn.LocalAddr().String(),
 	})
-
+	h.md.RemoteAddr = conn.RemoteAddr().String()
+	h.md.LocalAddr = conn.LocalAddr().String()
 	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
 
 	defer func() {
@@ -195,11 +197,21 @@ func (h *relayHandler) Handle(ctx context.Context, conn net.Conn, opts ...handle
 		log = log.WithFields(map[string]any{"user": user})
 	}
 
-	if h.options.Auther != nil &&
-		!h.options.Auther.Authenticate(ctx, user, pass) {
-		resp.Status = relay.StatusUnauthorized
-		resp.WriteTo(conn)
-		return ErrUnauthorized
+	if auther := h.options.Auther; auther != nil {
+		// 需要认证
+		// 获取id
+		id := auther.Authenticate(ctx, user, pass)
+		if id == auth.AUTH_NOT_PASSED {
+			// 使用ip认证
+			host, _, _ := net.SplitHostPort(h.md.RemoteAddr)
+			id = auther.Authenticate(ctx, host, "")
+		}
+		if id == auth.AUTH_NOT_PASSED {
+			resp.Status = relay.StatusUnauthorized
+			resp.WriteTo(conn)
+			return ErrUnauthorized
+		}
+		h.md.UserID = id
 	}
 
 	network := "tcp"

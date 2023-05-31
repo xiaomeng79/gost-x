@@ -131,19 +131,19 @@ func (h *tunHandler) transportServer(ctx context.Context, tun io.ReadWriter, con
 						}
 					}
 
-					if auther := h.options.Auther; auther != nil {
-						ok := true
-						key := bytes.TrimRight((*b)[4:20], "\x00")
-						for _, ip := range peerIPs {
-							if ok = auther.Authenticate(ctx, ip.String(), string(key)); !ok {
-								break
-							}
-						}
-						if !ok {
-							log.Debugf("keepalive from %v => %v, auth FAILED", addr, peerIPs)
-							return nil
-						}
-					}
+					// if auther := h.options.Auther; auther != nil {
+					// 	ok := true
+					// 	key := bytes.TrimRight((*b)[4:20], "\x00")
+					// 	for _, ip := range peerIPs {
+					// 		if ok = auther.Authenticate(ctx, ip.String(), string(key)); !ok {
+					// 			break
+					// 		}
+					// 	}
+					// 	if !ok {
+					// 		log.Debugf("keepalive from %v => %v, auth FAILED", addr, peerIPs)
+					// 		return nil
+					// 	}
+					// }
 
 					log.Debugf("keepalive from %v => %v", addr, peerIPs)
 

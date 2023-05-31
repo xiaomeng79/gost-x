@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-gost/core/auth"
 	"github.com/go-gost/core/chain"
 	"github.com/go-gost/core/handler"
 	"github.com/go-gost/core/logger"
@@ -72,7 +73,8 @@ func (h *forwardHandler) Handle(ctx context.Context, conn net.Conn, opts ...hand
 		"remote": conn.RemoteAddr().String(),
 		"local":  conn.LocalAddr().String(),
 	})
-
+	h.md.RemoteAddr = conn.RemoteAddr().String()
+	h.md.LocalAddr = conn.LocalAddr().String()
 	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
 	defer func() {
 		log.WithFields(map[string]any{
@@ -204,13 +206,22 @@ func (h *forwardHandler) handleHTTP(ctx context.Context, rw io.ReadWriter, log l
 			log.Debugf("find node for host %s -> %s(%s)", req.Host, target.Name, target.Addr)
 
 			if auther := target.Options().Auther; auther != nil {
+				// 需要认证
 				username, password, _ := req.BasicAuth()
-				if !auther.Authenticate(ctx, username, password) {
+				// 获取id
+				id := auther.Authenticate(ctx, username, password)
+				if id == auth.AUTH_NOT_PASSED {
+					// 使用ip认证
+					host, _, _ := net.SplitHostPort(h.md.RemoteAddr)
+					id = auther.Authenticate(ctx, host, "")
+				}
+				if id == auth.AUTH_NOT_PASSED {
 					resp.StatusCode = http.StatusUnauthorized
 					resp.Header.Set("WWW-Authenticate", "Basic")
 					log.Warnf("node %s(%s) 401 unauthorized", target.Name, target.Addr)
 					return resp.Write(rw)
 				}
+				h.md.UserID = id
 			}
 
 			var cc net.Conn

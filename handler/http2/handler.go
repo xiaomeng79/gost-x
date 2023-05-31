@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-gost/core/auth"
 	"github.com/go-gost/core/chain"
 	"github.com/go-gost/core/handler"
 	"github.com/go-gost/core/logger"
@@ -71,6 +72,8 @@ func (h *http2Handler) Handle(ctx context.Context, conn net.Conn, opts ...handle
 		"remote": conn.RemoteAddr().String(),
 		"local":  conn.LocalAddr().String(),
 	})
+	h.md.RemoteAddr = conn.RemoteAddr().String()
+	h.md.LocalAddr = conn.LocalAddr().String()
 	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
 	defer func() {
 		log.WithFields(map[string]any{
@@ -254,8 +257,22 @@ func (h *http2Handler) basicProxyAuth(proxyAuth string) (username, password stri
 
 func (h *http2Handler) authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, resp *http.Response, log logger.Logger) (ok bool) {
 	u, p, _ := h.basicProxyAuth(r.Header.Get("Proxy-Authorization"))
-	if h.options.Auther == nil || h.options.Auther.Authenticate(ctx, u, p) {
-		return true
+	if auther := h.options.Auther; auther != nil {
+		// 需要认证
+		// 获取id
+		id := h.options.Auther.Authenticate(ctx, u, p)
+		if id != auth.AUTH_NOT_PASSED {
+			h.md.UserID = id
+			return true
+		}
+		// 使用ip认证
+		host, _, _ := net.SplitHostPort(h.md.RemoteAddr)
+		id = auther.Authenticate(ctx, host, "")
+
+		if id != auth.AUTH_NOT_PASSED {
+			h.md.UserID = id
+			return true
+		}
 	}
 
 	pr := h.md.probeResistance

@@ -17,6 +17,7 @@ type serverSelector struct {
 	TLSConfig     *tls.Config
 	logger        logger.Logger
 	noTLS         bool
+	md            metadata
 }
 
 func (selector *serverSelector) Methods() []uint8 {
@@ -63,17 +64,25 @@ func (s *serverSelector) OnSelected(method uint8, conn net.Conn) (net.Conn, erro
 			return nil, err
 		}
 		s.logger.Trace(req)
-
-		if s.Authenticator != nil &&
-			!s.Authenticator.Authenticate(context.Background(), req.Username, req.Password) {
-			resp := gosocks5.NewUserPassResponse(gosocks5.UserPassVer, gosocks5.Failure)
-			if err := resp.Write(conn); err != nil {
-				s.logger.Error(err)
-				return nil, err
+		if auther := s.Authenticator; auther != nil {
+			// 需要认证
+			// 获取id
+			id := auther.Authenticate(context.Background(), req.Username, req.Password)
+			if id == auth.AUTH_NOT_PASSED {
+				// 使用ip认证
+				host, _, _ := net.SplitHostPort(s.md.RemoteAddr)
+				id = auther.Authenticate(context.Background(), host, "")
 			}
-			s.logger.Info(resp)
 
-			return nil, gosocks5.ErrAuthFailure
+			if id == auth.AUTH_NOT_PASSED {
+				resp := gosocks5.NewUserPassResponse(gosocks5.UserPassVer, gosocks5.Failure)
+				if err := resp.Write(conn); err != nil {
+					s.logger.Error(err)
+					return nil, err
+				}
+				return nil, gosocks5.ErrAuthFailure
+			}
+			s.md.UserID = id
 		}
 
 		resp := gosocks5.NewUserPassResponse(gosocks5.UserPassVer, gosocks5.Succeeded)

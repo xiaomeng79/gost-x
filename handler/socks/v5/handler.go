@@ -56,6 +56,7 @@ func (h *socks5Handler) Init(md md.Metadata) (err error) {
 		TLSConfig:     h.options.TLSConfig,
 		logger:        h.options.Logger,
 		noTLS:         h.md.noTLS,
+		md:            h.md,
 	}
 
 	return
@@ -70,7 +71,8 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 		"remote": conn.RemoteAddr().String(),
 		"local":  conn.LocalAddr().String(),
 	})
-
+	h.md.RemoteAddr = conn.RemoteAddr().String()
+	h.md.LocalAddr = conn.LocalAddr().String()
 	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
 	defer func() {
 		log.WithFields(map[string]any{

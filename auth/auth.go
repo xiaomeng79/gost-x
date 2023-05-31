@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -105,20 +106,26 @@ func NewAuthenticator(opts ...Option) auth.Authenticator {
 }
 
 // Authenticate checks the validity of the provided user-password pair.
-func (p *authenticator) Authenticate(ctx context.Context, user, password string) bool {
+func (p *authenticator) Authenticate(ctx context.Context, user, password string) int64 {
 	if p == nil {
-		return true
+		return auth.AUTH_NOT_NEED
 	}
 
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
 	if len(p.kvs) == 0 {
-		return true
+		return auth.AUTH_NOT_NEED
 	}
 
-	v, ok := p.kvs[user]
-	return ok && (v == "" || password == v)
+	if v, ok := p.kvs[user+":"+password]; ok {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return auth.AUTH_NOT_PASSED
+		}
+		return id
+	}
+	return auth.AUTH_NOT_PASSED
 }
 
 func (p *authenticator) periodReload(ctx context.Context) error {

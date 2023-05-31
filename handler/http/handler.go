@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/go-gost/core/auth"
 	"github.com/go-gost/core/chain"
 	"github.com/go-gost/core/handler"
 	"github.com/go-gost/core/logger"
@@ -70,6 +71,8 @@ func (h *httpHandler) Handle(ctx context.Context, conn net.Conn, opts ...handler
 		"remote": conn.RemoteAddr().String(),
 		"local":  conn.LocalAddr().String(),
 	})
+	h.md.RemoteAddr = conn.RemoteAddr().String()
+	h.md.LocalAddr = conn.LocalAddr().String()
 	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
 	defer func() {
 		log.WithFields(map[string]any{
@@ -160,7 +163,8 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 	if !h.authenticate(ctx, conn, req, resp, log) {
 		return nil
 	}
-
+	fields["userid"] = h.md.UserID
+	log = log.WithFields(fields)
 	if network == "udp" {
 		return h.handleUDP(ctx, conn, log)
 	}
@@ -268,10 +272,23 @@ func (h *httpHandler) basicProxyAuth(proxyAuth string, log logger.Logger) (usern
 
 func (h *httpHandler) authenticate(ctx context.Context, conn net.Conn, req *http.Request, resp *http.Response, log logger.Logger) (ok bool) {
 	u, p, _ := h.basicProxyAuth(req.Header.Get("Proxy-Authorization"), log)
-	if h.options.Auther == nil || h.options.Auther.Authenticate(ctx, u, p) {
-		return true
-	}
+	if auther := h.options.Auther; auther != nil {
+		// 需要认证
+		// 获取id
+		id := h.options.Auther.Authenticate(ctx, u, p)
+		if id != auth.AUTH_NOT_PASSED {
+			h.md.UserID = id
+			return true
+		}
+		// 使用ip认证
+		host, _, _ := net.SplitHostPort(h.md.RemoteAddr)
+		id = auther.Authenticate(ctx, host, "")
 
+		if id != auth.AUTH_NOT_PASSED {
+			h.md.UserID = id
+			return true
+		}
+	}
 	pr := h.md.probeResistance
 	// probing resistance is enabled, and knocking host is mismatch.
 	if pr != nil && (pr.Knock == "" || !strings.EqualFold(req.URL.Hostname(), pr.Knock)) {

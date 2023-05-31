@@ -6,6 +6,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/go-gost/core/auth"
 	"github.com/go-gost/core/chain"
 	"github.com/go-gost/core/handler"
 	"github.com/go-gost/core/logger"
@@ -65,7 +66,8 @@ func (h *socks4Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 		"remote": conn.RemoteAddr().String(),
 		"local":  conn.LocalAddr().String(),
 	})
-
+	h.md.RemoteAddr = conn.RemoteAddr().String()
+	h.md.LocalAddr = conn.LocalAddr().String()
 	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
 	defer func() {
 		log.WithFields(map[string]any{
@@ -90,11 +92,21 @@ func (h *socks4Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 
 	conn.SetReadDeadline(time.Time{})
 
-	if h.options.Auther != nil &&
-		!h.options.Auther.Authenticate(ctx, string(req.Userid), "") {
-		resp := gosocks4.NewReply(gosocks4.RejectedUserid, nil)
-		log.Trace(resp)
-		return resp.Write(conn)
+	if auther := h.options.Auther; auther != nil {
+		// 需要认证
+		// 获取id
+		id := auther.Authenticate(ctx, string(req.Userid), "")
+		if id == auth.AUTH_NOT_PASSED {
+			// 使用ip认证
+			host, _, _ := net.SplitHostPort(h.md.RemoteAddr)
+			id = auther.Authenticate(ctx, host, "")
+		}
+		if id == auth.AUTH_NOT_PASSED {
+			resp := gosocks4.NewReply(gosocks4.RejectedUserid, nil)
+			log.Trace(resp)
+			return resp.Write(conn)
+		}
+		h.md.UserID = id
 	}
 
 	switch req.Cmd {

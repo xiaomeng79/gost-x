@@ -9,6 +9,7 @@ import (
 	"github.com/go-gost/core/logger"
 	mdata "github.com/go-gost/core/metadata"
 	mdutil "github.com/go-gost/core/metadata/util"
+	"github.com/go-gost/x/handler/common"
 	xingress "github.com/go-gost/x/ingress"
 	"github.com/go-gost/x/registry"
 )
@@ -22,6 +23,7 @@ type metadata struct {
 	entryPoint    string
 	ingress       ingress.Ingress
 	directTunnel  bool
+	common.Metadata
 }
 
 func (h *relayHandler) parseMetadata(md mdata.Metadata) (err error) {

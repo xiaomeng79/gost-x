@@ -5,6 +5,7 @@ import (
 
 	mdata "github.com/go-gost/core/metadata"
 	mdutil "github.com/go-gost/core/metadata/util"
+	"github.com/go-gost/x/handler/common"
 )
 
 const (
@@ -16,6 +17,7 @@ type metadata struct {
 	bufferSize      int
 	keepAlivePeriod time.Duration
 	passphrase      string
+	common.Metadata
 }
 
 func (h *tunHandler) parseMetadata(md mdata.Metadata) (err error) {

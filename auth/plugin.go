@@ -33,21 +33,21 @@ func NewPluginAuthenticator(opts ...Option) auth.Authenticator {
 }
 
 // Authenticate checks the validity of the provided user-password pair.
-func (p *pluginAuthenticator) Authenticate(ctx context.Context, user, password string) bool {
+func (p *pluginAuthenticator) Authenticate(ctx context.Context, user, password string) int64 {
 	if p.client == nil {
-		return false
+		return auth.AUTH_NOT_NEED
 	}
 
-	r, err := p.client.Authenticate(ctx,
+	_, err := p.client.Authenticate(ctx,
 		&proto.AuthenticateRequest{
 			Username: user,
 			Password: password,
 		})
 	if err != nil {
 		p.options.logger.Error(err)
-		return false
+		return auth.AUTH_NOT_PASSED
 	}
-	return r.Ok
+	return auth.AUTH_NOT_NEED
 }
 
 func (p *pluginAuthenticator) Close() error {
