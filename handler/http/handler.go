@@ -25,6 +25,7 @@ import (
 	netpkg "github.com/go-gost/x/internal/net"
 	sx "github.com/go-gost/x/internal/util/selector"
 	"github.com/go-gost/x/registry"
+	"github.com/go-gost/x/utils"
 )
 
 func init() {
@@ -65,11 +66,12 @@ func (h *httpHandler) Handle(ctx context.Context, conn net.Conn, opts ...handler
 	defer conn.Close()
 
 	// ctx = sx.ContextWithHash(ctx, &sx.Hash{})
-
+	ctx, requestid := utils.GetOrSetRequestID(ctx)
 	start := time.Now()
 	log := h.options.Logger.WithFields(map[string]any{
-		"remote": conn.RemoteAddr().String(),
-		"local":  conn.LocalAddr().String(),
+		"remote":    conn.RemoteAddr().String(),
+		"local":     conn.LocalAddr().String(),
+		"requestid": requestid,
 	})
 	h.md.RemoteAddr = conn.RemoteAddr().String()
 	h.md.LocalAddr = conn.LocalAddr().String()

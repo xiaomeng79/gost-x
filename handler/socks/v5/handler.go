@@ -12,6 +12,7 @@ import (
 	"github.com/go-gost/gosocks5"
 	"github.com/go-gost/x/internal/util/socks"
 	"github.com/go-gost/x/registry"
+	"github.com/go-gost/x/utils"
 )
 
 var (
@@ -64,15 +65,17 @@ func (h *socks5Handler) Init(md md.Metadata) (err error) {
 
 func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handler.HandleOption) error {
 	defer conn.Close()
-
+	ctx, requestid := utils.GetOrSetRequestID(ctx)
 	start := time.Now()
 
 	log := h.options.Logger.WithFields(map[string]any{
-		"remote": conn.RemoteAddr().String(),
-		"local":  conn.LocalAddr().String(),
+		"remote":    conn.RemoteAddr().String(),
+		"local":     conn.LocalAddr().String(),
+		"requestid": requestid,
 	})
 	h.md.RemoteAddr = conn.RemoteAddr().String()
 	h.md.LocalAddr = conn.LocalAddr().String()
+	h.md.RequestID = requestid
 	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
 	defer func() {
 		log.WithFields(map[string]any{
