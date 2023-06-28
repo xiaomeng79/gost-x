@@ -111,22 +111,28 @@ func (l *rateLimiter) Limiter(key string) limiter.Limiter {
 
 	var lims []limiter.Limiter
 
-	if ip := net.ParseIP(key); ip != nil {
-		found := false
-		if p := l.ipLimits[key]; p != nil {
-			if lim := p.Limiter(); lim != nil {
-				lims = append(lims, lim)
-				found = true
-			}
-		}
-		if !found {
-			if p, _ := l.cidrLimits.ContainingNetworks(ip); len(p) > 0 {
-				if v, _ := p[0].(*cidrLimitEntry); v != nil {
-					if lim := v.limit.Limiter(); lim != nil {
-						lims = append(lims, lim)
-					}
-				}
-			}
+	// if ip := net.ParseIP(key); ip != nil {
+	// 	found := false
+	// 	if p := l.ipLimits[key]; p != nil {
+	// 		if lim := p.Limiter(); lim != nil {
+	// 			lims = append(lims, lim)
+	// 			found = true
+	// 		}
+	// 	}
+	// 	if !found {
+	// 		if p, _ := l.cidrLimits.ContainingNetworks(ip); len(p) > 0 {
+	// 			if v, _ := p[0].(*cidrLimitEntry); v != nil {
+	// 				if lim := v.limit.Limiter(); lim != nil {
+	// 					lims = append(lims, lim)
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
+
+	if p := l.ipLimits[key]; p != nil {
+		if lim := p.Limiter(); lim != nil {
+			lims = append(lims, lim)
 		}
 	}
 
@@ -151,7 +157,7 @@ func (l *rateLimiter) Limiter(key string) limiter.Limiter {
 	l.limits[key] = lim
 
 	if lim != nil && l.options.logger != nil {
-		l.options.logger.Debugf("input limit for %s: %d", key, lim.Limit())
+		l.options.logger.Debugf("input limit for %s: %f", key, lim.Limit())
 	}
 
 	return lim
@@ -200,16 +206,18 @@ func (l *rateLimiter) reload(ctx context.Context) error {
 		case IPLimitKey:
 			ipLimits[key] = NewRateLimitGenerator(limit)
 		default:
-			if ip := net.ParseIP(key); ip != nil {
-				ipLimits[key] = NewRateLimitSingleGenerator(limit)
-				break
-			}
-			if _, ipNet, _ := net.ParseCIDR(key); ipNet != nil {
-				cidrLimits.Insert(&cidrLimitEntry{
-					ipNet: *ipNet,
-					limit: NewRateLimitGenerator(limit),
-				})
-			}
+			ipLimits[key] = NewRateLimitSingleGenerator(limit)
+
+			// 	if ip := net.ParseIP(key); ip != nil {
+			// 		ipLimits[key] = NewRateLimitSingleGenerator(limit)
+			// 		break
+			// 	}
+			// 	if _, ipNet, _ := net.ParseCIDR(key); ipNet != nil {
+			// 		cidrLimits.Insert(&cidrLimitEntry{
+			// 			ipNet: *ipNet,
+			// 			limit: NewRateLimitGenerator(limit),
+			// 		})
+			// 	}
 		}
 	}
 

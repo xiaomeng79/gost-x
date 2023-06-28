@@ -82,10 +82,6 @@ func (h *httpHandler) Handle(ctx context.Context, conn net.Conn, opts ...handler
 		}).Infof("%s >< %s", conn.RemoteAddr(), conn.LocalAddr())
 	}()
 
-	if !h.checkRateLimit(conn.RemoteAddr()) {
-		return nil
-	}
-
 	req, err := http.ReadRequest(bufio.NewReader(conn))
 	if err != nil {
 		log.Error(err)
@@ -167,6 +163,16 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 	}
 	fields["userid"] = h.md.UserID
 	log = log.WithFields(fields)
+	if !h.checkRateLimit(strconv.FormatInt(h.md.UserID, 10)) {
+		// 限流没通过
+		log.Info("触发限流")
+		resp.StatusCode = http.StatusTooManyRequests
+		if strings.ToLower(req.Header.Get("Proxy-Connection")) == "keep-alive" {
+			resp.Header.Set("Connection", "close")
+			resp.Header.Set("Proxy-Connection", "close")
+		}
+		return resp.Write(conn)
+	}
 	if network == "udp" {
 		return h.handleUDP(ctx, conn, log)
 	}
@@ -372,12 +378,11 @@ func (h *httpHandler) authenticate(ctx context.Context, conn net.Conn, req *http
 	return
 }
 
-func (h *httpHandler) checkRateLimit(addr net.Addr) bool {
+func (h *httpHandler) checkRateLimit(id string) bool {
 	if h.options.RateLimiter == nil {
 		return true
 	}
-	host, _, _ := net.SplitHostPort(addr.String())
-	if limiter := h.options.RateLimiter.Limiter(host); limiter != nil {
+	if limiter := h.options.RateLimiter.Limiter(id); limiter != nil {
 		return limiter.Allow(1)
 	}
 

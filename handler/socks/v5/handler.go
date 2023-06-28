@@ -53,11 +53,12 @@ func (h *socks5Handler) Init(md md.Metadata) (err error) {
 	}
 
 	h.selector = &serverSelector{
-		Authenticator: h.options.Auther,
+		authenticator: h.options.Auther,
 		TLSConfig:     h.options.TLSConfig,
 		logger:        h.options.Logger,
 		noTLS:         h.md.noTLS,
 		md:            h.md,
+		rateLimiter:   h.options.RateLimiter,
 	}
 
 	return
@@ -83,9 +84,9 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 		}).Infof("%s >< %s", conn.RemoteAddr(), conn.LocalAddr())
 	}()
 
-	if !h.checkRateLimit(conn.RemoteAddr()) {
-		return nil
-	}
+	// if !h.checkRateLimit(strconv.FormatInt(h.md.UserID, 10)) {
+	// 	return nil
+	// }
 
 	if h.md.readTimeout > 0 {
 		conn.SetReadDeadline(time.Now().Add(h.md.readTimeout))
@@ -123,14 +124,13 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 	}
 }
 
-func (h *socks5Handler) checkRateLimit(addr net.Addr) bool {
-	if h.options.RateLimiter == nil {
-		return true
-	}
-	host, _, _ := net.SplitHostPort(addr.String())
-	if limiter := h.options.RateLimiter.Limiter(host); limiter != nil {
-		return limiter.Allow(1)
-	}
+// func (h *socks5Handler) checkRateLimit(id string) bool {
+// 	if h.options.RateLimiter == nil {
+// 		return true
+// 	}
+// 	if limiter := h.options.RateLimiter.Limiter(id); limiter != nil {
+// 		return limiter.Allow(1)
+// 	}
 
-	return true
-}
+// 	return true
+// }
