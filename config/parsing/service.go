@@ -3,6 +3,7 @@ package parsing
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-gost/core/admission"
 	"github.com/go-gost/core/auth"
@@ -175,7 +176,7 @@ func ParseService(cfg *config.ServiceConfig) (service.Service, error) {
 
 	routerOpts := []chain.RouterOption{
 		chain.RetriesRouterOption(cfg.Handler.Retries),
-		// chain.TimeoutRouterOption(10*time.Second),
+		chain.TimeoutRouterOption(5 * time.Second),
 		chain.InterfaceRouterOption(ifce),
 		chain.SockOptsRouterOption(sockOpts),
 		chain.ResolverRouterOption(registry.ResolverRegistry().Get(cfg.Resolver)),

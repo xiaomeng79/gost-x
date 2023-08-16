@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultRealm = "gost"
+	defaultRealm = "ipproxy"
 )
 
 type metadata struct {
