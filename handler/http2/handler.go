@@ -68,17 +68,16 @@ func (h *http2Handler) Handle(ctx context.Context, conn net.Conn, opts ...handle
 	defer conn.Close()
 
 	start := time.Now()
+	remoteAddr := conn.RemoteAddr().String()
+	localAddr := conn.LocalAddr().String()
 	log := h.options.Logger.WithFields(map[string]any{
-		"remote": conn.RemoteAddr().String(),
-		"local":  conn.LocalAddr().String(),
+		"remote": remoteAddr,
+		"local":  localAddr,
 	})
-	h.md.RemoteAddr = conn.RemoteAddr().String()
-	h.md.LocalAddr = conn.LocalAddr().String()
-	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
 	defer func() {
 		log.WithFields(map[string]any{
 			"duration": time.Since(start),
-		}).Infof("%s >< %s", conn.RemoteAddr(), conn.LocalAddr())
+		}).Infof("%s >< %s", remoteAddr, localAddr)
 	}()
 
 	if !h.checkRateLimit(conn.RemoteAddr()) {
@@ -262,15 +261,13 @@ func (h *http2Handler) authenticate(ctx context.Context, w http.ResponseWriter, 
 		// 获取id
 		id := h.options.Auther.Authenticate(ctx, u, p)
 		if id != auth.AUTH_NOT_PASSED {
-			h.md.UserID = id
 			return true
 		}
 		// 使用ip认证
-		host, _, _ := net.SplitHostPort(h.md.RemoteAddr)
+		host, _, _ := net.SplitHostPort(r.RemoteAddr)
 		id = auther.Authenticate(ctx, host, "")
 
 		if id != auth.AUTH_NOT_PASSED {
-			h.md.UserID = id
 			return true
 		}
 	}

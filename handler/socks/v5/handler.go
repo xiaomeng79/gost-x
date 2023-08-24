@@ -25,7 +25,7 @@ func init() {
 }
 
 type socks5Handler struct {
-	selector gosocks5.Selector
+	selector *serverSelector
 	router   *chain.Router
 	md       metadata
 	options  handler.Options
@@ -69,31 +69,39 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 	ctx, requestid := utils.GetOrSetRequestID(ctx)
 	start := time.Now()
 
+	remoteAddr := conn.RemoteAddr().String()
+	localAddr := conn.LocalAddr().String()
+
 	log := h.options.Logger.WithFields(map[string]any{
-		"remote":    conn.RemoteAddr().String(),
-		"local":     conn.LocalAddr().String(),
 		"requestid": requestid,
 	})
-	h.md.RemoteAddr = conn.RemoteAddr().String()
-	h.md.LocalAddr = conn.LocalAddr().String()
-	h.md.RequestID = requestid
-	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
+
+	logMsg := utils.GetLogMsg(ctx)
+	logMsg.RequestId = requestid
+	logMsg.VpsId = h.md.VpsID
+	logMsg.OriginIp = remoteAddr
+	logMsg.OriginPort = remoteAddr
+	logMsg.ProxyIp = localAddr
+	logMsg.ProxyPort = localAddr
+	logMsg.StartTime = time.Now().UnixMilli()
+	ctx = utils.SetLogMsg(ctx, logMsg)
+	log.Infof("%+v", logMsg)
 	defer func() {
+		logMsg.EndTime = time.Now().UnixMilli()
 		log.WithFields(map[string]any{
 			"duration": time.Since(start),
-		}).Infof("%s >< %s", conn.RemoteAddr(), conn.LocalAddr())
-	}()
+		}).Infof("%+v", logMsg)
 
-	// if !h.checkRateLimit(strconv.FormatInt(h.md.UserID, 10)) {
-	// 	return nil
-	// }
+	}()
 
 	if h.md.readTimeout > 0 {
 		conn.SetReadDeadline(time.Now().Add(h.md.readTimeout))
 	}
 
-	conn = gosocks5.ServerConn(conn, h.selector)
-	req, err := gosocks5.ReadRequest(conn)
+	connServer := gosocks5.ServerConn(ctx, conn, h.selector)
+	ctx = connServer.GetCtx()
+	logMsg = utils.GetLogMsg(ctx)
+	req, err := gosocks5.ReadRequest(connServer)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -102,6 +110,9 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 	conn.SetReadDeadline(time.Time{})
 
 	address := req.Addr.String()
+	logMsg.RemoteIp = address
+	logMsg.RemotePort = address
+	logMsg.TargetUrl = address
 
 	switch req.Cmd {
 	case gosocks5.CmdConnect:
@@ -123,14 +134,3 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 		return err
 	}
 }
-
-// func (h *socks5Handler) checkRateLimit(id string) bool {
-// 	if h.options.RateLimiter == nil {
-// 		return true
-// 	}
-// 	if limiter := h.options.RateLimiter.Limiter(id); limiter != nil {
-// 		return limiter.Allow(1)
-// 	}
-
-// 	return true
-// }

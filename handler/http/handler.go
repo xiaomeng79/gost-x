@@ -65,22 +65,22 @@ func (h *httpHandler) Init(md md.Metadata) error {
 func (h *httpHandler) Handle(ctx context.Context, conn net.Conn, opts ...handler.HandleOption) error {
 	defer conn.Close()
 
-	// ctx = sx.ContextWithHash(ctx, &sx.Hash{})
 	ctx, requestid := utils.GetOrSetRequestID(ctx)
-	start := time.Now()
 	log := h.options.Logger.WithFields(map[string]any{
-		"remote":    conn.RemoteAddr().String(),
-		"local":     conn.LocalAddr().String(),
 		"requestid": requestid,
 	})
-	h.md.RemoteAddr = conn.RemoteAddr().String()
-	h.md.LocalAddr = conn.LocalAddr().String()
-	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
-	defer func() {
-		log.WithFields(map[string]any{
-			"duration": time.Since(start),
-		}).Infof("%s >< %s", conn.RemoteAddr(), conn.LocalAddr())
-	}()
+
+	remoteAddr := conn.RemoteAddr().String()
+	localAddr := conn.LocalAddr().String()
+	logMsg := utils.GetLogMsg(ctx)
+	logMsg.RequestId = requestid
+	logMsg.VpsId = h.md.VpsID
+	logMsg.OriginIp = remoteAddr
+	logMsg.OriginPort = remoteAddr
+	logMsg.ProxyIp = localAddr
+	logMsg.ProxyPort = localAddr
+	logMsg.StartTime = time.Now().UnixMilli()
+	ctx = utils.SetLogMsg(ctx, logMsg)
 
 	req, err := http.ReadRequest(bufio.NewReader(conn))
 	if err != nil {
@@ -93,6 +93,15 @@ func (h *httpHandler) Handle(ctx context.Context, conn net.Conn, opts ...handler
 }
 
 func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *http.Request, log logger.Logger) error {
+	ctx, requestid := utils.GetOrSetRequestID(ctx)
+	log = h.options.Logger.WithFields(map[string]any{
+		"requestid": requestid,
+	})
+	logMsg := utils.GetLogMsg(ctx)
+	defer func() {
+		logMsg.EndTime = time.Now().UnixMilli()
+		log.Infof("%+v", logMsg)
+	}()
 	if !req.URL.IsAbs() && govalidator.IsDNSName(req.Host) {
 		req.URL.Scheme = "http"
 	}
@@ -126,9 +135,9 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 	fields := map[string]any{
 		"dst": addr,
 	}
-	if u, _, _ := h.basicProxyAuth(req.Header.Get("Proxy-Authorization"), log); u != "" {
-		fields["user"] = u
-	}
+	// if u, _, _ := h.basicProxyAuth(req.Header.Get("Proxy-Authorization"), log); u != "" {
+	// 	fields["user"] = u
+	// }
 	log = log.WithFields(fields)
 
 	if log.IsLevelEnabled(logger.TraceLevel) {
@@ -158,14 +167,18 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 		return resp.Write(conn)
 	}
 
-	if !h.authenticate(ctx, conn, req, resp, log) {
+	ctx, ok := h.authenticate(ctx, conn, req, resp, log)
+	logMsg = utils.GetLogMsg(ctx)
+	logMsg.TargetUrl = req.RequestURI
+	logMsg.RemoteIp = addr
+	logMsg.RemotePort = addr
+	if !ok {
 		return nil
 	}
-	fields["userid"] = h.md.UserID
-	log = log.WithFields(fields)
-	if !h.checkRateLimit(strconv.FormatInt(h.md.UserID, 10)) {
+	userID := logMsg.UserId
+	if !h.checkRateLimit(strconv.FormatInt(userID, 10)) {
 		// 限流没通过
-		log.Info("触发限流")
+		log.Warnf("触发限流:user_id:%d", userID)
 		resp.StatusCode = http.StatusTooManyRequests
 		if strings.ToLower(req.Header.Get("Proxy-Connection")) == "keep-alive" {
 			resp.Header.Set("Connection", "close")
@@ -228,13 +241,8 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 			return err
 		}
 	}
-
-	start := time.Now()
 	log.Infof("%s <-> %s", conn.RemoteAddr(), addr)
 	netpkg.Transport(conn, cc)
-	log.WithFields(map[string]any{
-		"duration": time.Since(start),
-	}).Infof("%s >-< %s", conn.RemoteAddr(), addr)
 
 	return nil
 }
@@ -278,23 +286,34 @@ func (h *httpHandler) basicProxyAuth(proxyAuth string, log logger.Logger) (usern
 	return cs[:s], cs[s+1:], true
 }
 
-func (h *httpHandler) authenticate(ctx context.Context, conn net.Conn, req *http.Request, resp *http.Response, log logger.Logger) (ok bool) {
+func (h *httpHandler) authenticate(ctx context.Context, conn net.Conn, req *http.Request, resp *http.Response, log logger.Logger) (context.Context, bool) {
+	ctx, requestid := utils.GetOrSetRequestID(ctx)
+	log = h.options.Logger.WithFields(map[string]any{
+		"requestid": requestid,
+	})
+	logMsg := utils.GetLogMsg(ctx)
 	u, p, _ := h.basicProxyAuth(req.Header.Get("Proxy-Authorization"), log)
+	defer func() {
+		fields := make(map[string]interface{}, 1)
+		fields["user"] = u
+		ctx = utils.SetLogMsg(ctx, logMsg)
+		log.WithFields(fields).Infof("%+v", logMsg)
+	}()
 	if auther := h.options.Auther; auther != nil {
 		// 需要认证
 		// 获取id
 		id := h.options.Auther.Authenticate(ctx, u, p)
 		if id != auth.AUTH_NOT_PASSED {
-			h.md.UserID = id
-			return true
+			logMsg.UserId = id
+			return ctx, true
 		}
 		// 使用ip认证
-		host, _, _ := net.SplitHostPort(h.md.RemoteAddr)
+		host, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 		id = auther.Authenticate(ctx, host, "")
 
 		if id != auth.AUTH_NOT_PASSED {
-			h.md.UserID = id
-			return true
+			logMsg.UserId = id
+			return ctx, true
 		}
 	}
 	pr := h.md.probeResistance
@@ -327,7 +346,7 @@ func (h *httpHandler) authenticate(ctx context.Context, conn net.Conn, req *http
 
 			req.Write(cc)
 			netpkg.Transport(conn, cc)
-			return
+			return ctx, false
 		case "file":
 			f, _ := os.Open(pr.Value)
 			if f != nil {
@@ -375,7 +394,7 @@ func (h *httpHandler) authenticate(ctx context.Context, conn net.Conn, req *http
 	}
 
 	resp.Write(conn)
-	return
+	return ctx, false
 }
 
 func (h *httpHandler) checkRateLimit(id string) bool {

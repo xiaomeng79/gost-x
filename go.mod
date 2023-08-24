@@ -40,6 +40,7 @@ require (
 	golang.org/x/sys v0.6.0
 	golang.org/x/time v0.3.0
 	golang.zx2c4.com/wireguard v0.0.0-20220703234212-c31a7b1ab478
+	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f
 	google.golang.org/grpc v1.54.0
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -104,9 +105,10 @@ require (
 	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect
-	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
 replace github.com/go-gost/core => /Users/qingfangmeng/Documents/project/go/mygoproxy/gost-core
+
+replace github.com/go-gost/gosocks5 => /Users/qingfangmeng/Documents/project/go/mygoproxy/gosocks5

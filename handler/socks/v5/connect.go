@@ -33,7 +33,6 @@ func (h *socks5Handler) handleConnect(ctx context.Context, conn net.Conn, networ
 	case "host":
 		ctx = sx.ContextWithHash(ctx, &sx.Hash{Source: address})
 	}
-
 	cc, err := h.router.Dial(ctx, network, address)
 	if err != nil {
 		resp := gosocks5.NewReply(gosocks5.NetUnreachable, nil)

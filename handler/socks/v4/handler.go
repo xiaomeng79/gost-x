@@ -62,17 +62,16 @@ func (h *socks4Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 
 	start := time.Now()
 
+	remoteAddr := conn.RemoteAddr().String()
+	localAddr := conn.LocalAddr().String()
 	log := h.options.Logger.WithFields(map[string]any{
-		"remote": conn.RemoteAddr().String(),
-		"local":  conn.LocalAddr().String(),
+		"remote": remoteAddr,
+		"local":  localAddr,
 	})
-	h.md.RemoteAddr = conn.RemoteAddr().String()
-	h.md.LocalAddr = conn.LocalAddr().String()
-	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
 	defer func() {
 		log.WithFields(map[string]any{
 			"duration": time.Since(start),
-		}).Infof("%s >< %s", conn.RemoteAddr(), conn.LocalAddr())
+		}).Infof("%s >< %s", remoteAddr, localAddr)
 	}()
 
 	if !h.checkRateLimit(conn.RemoteAddr()) {
@@ -98,7 +97,7 @@ func (h *socks4Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 		id := auther.Authenticate(ctx, string(req.Userid), "")
 		if id == auth.AUTH_NOT_PASSED {
 			// 使用ip认证
-			host, _, _ := net.SplitHostPort(h.md.RemoteAddr)
+			host, _, _ := net.SplitHostPort(remoteAddr)
 			id = auther.Authenticate(ctx, host, "")
 		}
 		if id == auth.AUTH_NOT_PASSED {
@@ -106,7 +105,6 @@ func (h *socks4Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 			log.Trace(resp)
 			return resp.Write(conn)
 		}
-		h.md.UserID = id
 	}
 
 	switch req.Cmd {

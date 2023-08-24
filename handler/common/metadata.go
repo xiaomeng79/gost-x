@@ -1,8 +1,23 @@
 package common
 
+import (
+	mdata "github.com/go-gost/core/metadata"
+	mdutil "github.com/go-gost/core/metadata/util"
+)
+
+const (
+	vpsID      = "vpsid"
+	logService = "logservice"
+)
+
 type Metadata struct {
-	UserID     int64
-	RemoteAddr string
-	LocalAddr  string
-	RequestID  string
+	VpsID          int64
+	logServiceAddr string
+}
+
+func ParseMetadata(md mdata.Metadata) Metadata {
+	m := Metadata{}
+	m.VpsID = int64(mdutil.GetInt(md, vpsID))
+	m.logServiceAddr = mdutil.GetString(md, logService)
+	return m
 }

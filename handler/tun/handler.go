@@ -80,8 +80,6 @@ func (h *tunHandler) Handle(ctx context.Context, conn net.Conn, opts ...handler.
 		"remote": conn.RemoteAddr().String(),
 		"local":  conn.LocalAddr().String(),
 	})
-	h.md.RemoteAddr = conn.RemoteAddr().String()
-	h.md.LocalAddr = conn.LocalAddr().String()
 	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
 	defer func() {
 		log.WithFields(map[string]any{

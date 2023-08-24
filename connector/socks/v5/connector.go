@@ -82,7 +82,7 @@ func (c *socks5Connector) Handshake(ctx context.Context, conn net.Conn) (net.Con
 		defer conn.SetDeadline(time.Time{})
 	}
 
-	cc := gosocks5.ClientConn(conn, c.selector)
+	cc := gosocks5.ClientConn(ctx, conn, c.selector)
 	if err := cc.Handleshake(); err != nil {
 		log.Error(err)
 		return nil, err

@@ -130,13 +130,12 @@ func (h *relayHandler) Forward(hop chain.Hop) {
 
 func (h *relayHandler) Handle(ctx context.Context, conn net.Conn, opts ...handler.HandleOption) (err error) {
 	start := time.Now()
+	remoteAddr := conn.RemoteAddr().String()
+	localAddr := conn.LocalAddr().String()
 	log := h.options.Logger.WithFields(map[string]any{
-		"remote": conn.RemoteAddr().String(),
-		"local":  conn.LocalAddr().String(),
+		"remote": remoteAddr,
+		"local":  localAddr,
 	})
-	h.md.RemoteAddr = conn.RemoteAddr().String()
-	h.md.LocalAddr = conn.LocalAddr().String()
-	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
 
 	defer func() {
 		if err != nil {
@@ -144,7 +143,7 @@ func (h *relayHandler) Handle(ctx context.Context, conn net.Conn, opts ...handle
 		}
 		log.WithFields(map[string]any{
 			"duration": time.Since(start),
-		}).Infof("%s >< %s", conn.RemoteAddr(), conn.LocalAddr())
+		}).Infof("%s >< %s", remoteAddr, localAddr)
 	}()
 
 	if !h.checkRateLimit(conn.RemoteAddr()) {
@@ -203,7 +202,7 @@ func (h *relayHandler) Handle(ctx context.Context, conn net.Conn, opts ...handle
 		id := auther.Authenticate(ctx, user, pass)
 		if id == auth.AUTH_NOT_PASSED {
 			// 使用ip认证
-			host, _, _ := net.SplitHostPort(h.md.RemoteAddr)
+			host, _, _ := net.SplitHostPort(remoteAddr)
 			id = auther.Authenticate(ctx, host, "")
 		}
 		if id == auth.AUTH_NOT_PASSED {
@@ -211,7 +210,6 @@ func (h *relayHandler) Handle(ctx context.Context, conn net.Conn, opts ...handle
 			resp.WriteTo(conn)
 			return ErrUnauthorized
 		}
-		h.md.UserID = id
 	}
 
 	network := "tcp"

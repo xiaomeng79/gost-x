@@ -58,6 +58,9 @@ func (h *httpHandler) parseMetadata(md mdata.Metadata) error {
 	h.md.hash = mdutil.GetString(md, hash)
 	h.md.authBasicRealm = mdutil.GetString(md, authBasicRealm)
 
+	h.md.Metadata = common.ParseMetadata(md)
+
+	// 初始化日志rpc服务
 	return nil
 }
 

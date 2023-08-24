@@ -1,6 +1,7 @@
 package v5
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"net/url"
@@ -30,7 +31,7 @@ func (s *clientSelector) Select(methods ...uint8) (method uint8) {
 	return
 }
 
-func (s *clientSelector) OnSelected(method uint8, conn net.Conn) (net.Conn, error) {
+func (s *clientSelector) OnSelected(ctx context.Context, method uint8, conn net.Conn) (context.Context, net.Conn, error) {
 	s.logger.Debug("method selected: ", method)
 
 	switch method {
@@ -52,22 +53,22 @@ func (s *clientSelector) OnSelected(method uint8, conn net.Conn) (net.Conn, erro
 		s.logger.Trace(req)
 		if err := req.Write(conn); err != nil {
 			s.logger.Error(err)
-			return nil, err
+			return ctx,nil, err
 		}
 
 		resp, err := gosocks5.ReadUserPassResponse(conn)
 		if err != nil {
 			s.logger.Error(err)
-			return nil, err
+			return ctx,nil, err
 		}
 		s.logger.Trace(resp)
 
 		if resp.Status != gosocks5.Succeeded {
-			return nil, gosocks5.ErrAuthFailure
+			return ctx,nil, gosocks5.ErrAuthFailure
 		}
 	case gosocks5.MethodNoAcceptable:
-		return nil, gosocks5.ErrBadMethod
+		return ctx,nil, gosocks5.ErrBadMethod
 	}
 
-	return conn, nil
+	return ctx,conn, nil
 }

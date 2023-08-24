@@ -44,6 +44,6 @@ func (h *socks5Handler) parseMetadata(md mdata.Metadata) (err error) {
 
 	h.md.compatibilityMode = mdutil.GetBool(md, compatibilityMode)
 	h.md.hash = mdutil.GetString(md, hash)
-
+	h.md.Metadata = common.ParseMetadata(md)
 	return nil
 }

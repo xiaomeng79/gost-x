@@ -69,18 +69,17 @@ func (h *forwardHandler) Handle(ctx context.Context, conn net.Conn, opts ...hand
 	defer conn.Close()
 
 	start := time.Now()
+	remoteAddr := conn.RemoteAddr().String()
+	localAddr := conn.LocalAddr().String()
 	log := h.options.Logger.WithFields(map[string]any{
-		"remote": conn.RemoteAddr().String(),
-		"local":  conn.LocalAddr().String(),
+		"remote": remoteAddr,
+		"local":  localAddr,
 	})
-	h.md.RemoteAddr = conn.RemoteAddr().String()
-	h.md.LocalAddr = conn.LocalAddr().String()
 
-	log.Infof("%s <> %s", conn.RemoteAddr(), conn.LocalAddr())
 	defer func() {
 		log.WithFields(map[string]any{
 			"duration": time.Since(start),
-		}).Infof("%s >< %s", conn.RemoteAddr(), conn.LocalAddr())
+		}).Infof("%s >< %s", remoteAddr, localAddr)
 	}()
 
 	if !h.checkRateLimit(conn.RemoteAddr()) {
@@ -216,7 +215,7 @@ func (h *forwardHandler) handleHTTP(ctx context.Context, rw io.ReadWriter, log l
 				id := auther.Authenticate(ctx, username, password)
 				if id == auth.AUTH_NOT_PASSED {
 					// 使用ip认证
-					host, _, _ := net.SplitHostPort(h.md.RemoteAddr)
+					host, _, _ := net.SplitHostPort(target.Addr)
 					id = auther.Authenticate(ctx, host, "")
 				}
 				if id == auth.AUTH_NOT_PASSED {
@@ -225,7 +224,6 @@ func (h *forwardHandler) handleHTTP(ctx context.Context, rw io.ReadWriter, log l
 					log.Warnf("node %s(%s) 401 unauthorized", target.Name, target.Addr)
 					return resp.Write(rw)
 				}
-				h.md.UserID = id
 			}
 
 			var cc net.Conn
