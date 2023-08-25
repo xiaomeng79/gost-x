@@ -22,6 +22,7 @@ import (
 	"github.com/go-gost/core/handler"
 	"github.com/go-gost/core/logger"
 	md "github.com/go-gost/core/metadata"
+	proxyv1 "github.com/go-gost/x/gen/proto/go/proxy/v1"
 	netpkg "github.com/go-gost/x/internal/net"
 	sx "github.com/go-gost/x/internal/util/selector"
 	"github.com/go-gost/x/registry"
@@ -75,16 +76,14 @@ func (h *httpHandler) Handle(ctx context.Context, conn net.Conn, opts ...handler
 	logMsg := utils.GetLogMsg(ctx)
 	logMsg.RequestId = requestid
 	logMsg.VpsId = h.md.VpsID
-	logMsg.OriginIp = remoteAddr
-	logMsg.OriginPort = remoteAddr
-	logMsg.ProxyIp = localAddr
-	logMsg.ProxyPort = localAddr
+	logMsg.OriginIp, logMsg.OriginPort, _ = net.SplitHostPort(remoteAddr)
+	logMsg.ProxyIp, logMsg.ProxyPort, _ = net.SplitHostPort(localAddr)
 	logMsg.StartTime = time.Now().UnixMilli()
 	ctx = utils.SetLogMsg(ctx, logMsg)
 
 	req, err := http.ReadRequest(bufio.NewReader(conn))
 	if err != nil {
-		log.Error(err)
+		log.Errorf("err:%+v,logMsg:%+v", err, logMsg)
 		return err
 	}
 	defer req.Body.Close()
@@ -100,6 +99,7 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 	logMsg := utils.GetLogMsg(ctx)
 	defer func() {
 		logMsg.EndTime = time.Now().UnixMilli()
+		logMsg.Duration = logMsg.EndTime - logMsg.StartTime
 		log.Infof("%+v", logMsg)
 	}()
 	if !req.URL.IsAbs() && govalidator.IsDNSName(req.Host) {
@@ -135,16 +135,13 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 	fields := map[string]any{
 		"dst": addr,
 	}
-	// if u, _, _ := h.basicProxyAuth(req.Header.Get("Proxy-Authorization"), log); u != "" {
-	// 	fields["user"] = u
-	// }
 	log = log.WithFields(fields)
 
 	if log.IsLevelEnabled(logger.TraceLevel) {
 		dump, _ := httputil.DumpRequest(req, false)
 		log.Trace(string(dump))
 	}
-	log.Debugf("%s >> %s", conn.RemoteAddr(), addr)
+	// log.Debugf("%s >> %s", conn.RemoteAddr(), addr)
 
 	resp := &http.Response{
 		ProtoMajor: 1,
@@ -170,15 +167,16 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 	ctx, ok := h.authenticate(ctx, conn, req, resp, log)
 	logMsg = utils.GetLogMsg(ctx)
 	logMsg.TargetUrl = req.RequestURI
-	logMsg.RemoteIp = addr
-	logMsg.RemotePort = addr
+	logMsg.RemoteIp, logMsg.RemotePort, _ = net.SplitHostPort(addr)
 	if !ok {
+		logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_AUTH
 		return nil
 	}
 	userID := logMsg.UserId
 	if !h.checkRateLimit(strconv.FormatInt(userID, 10)) {
 		// 限流没通过
 		log.Warnf("触发限流:user_id:%d", userID)
+		logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_LIMIT
 		resp.StatusCode = http.StatusTooManyRequests
 		if strings.ToLower(req.Header.Get("Proxy-Connection")) == "keep-alive" {
 			resp.Header.Set("Connection", "close")
@@ -212,7 +210,8 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 	cc, err := h.router.Dial(ctx, network, addr)
 	if err != nil {
 		resp.StatusCode = http.StatusServiceUnavailable
-
+		logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_TARGET
+		log.Errorf("router dial err:%+v,logMsg:%+v", err, logMsg)
 		if log.IsLevelEnabled(logger.TraceLevel) {
 			dump, _ := httputil.DumpResponse(resp, false)
 			log.Trace(string(dump))
@@ -241,7 +240,7 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 			return err
 		}
 	}
-	log.Infof("%s <-> %s", conn.RemoteAddr(), addr)
+	// log.Infof("%s <-> %s", conn.RemoteAddr(), addr)
 	netpkg.Transport(conn, cc)
 
 	return nil
@@ -294,10 +293,8 @@ func (h *httpHandler) authenticate(ctx context.Context, conn net.Conn, req *http
 	logMsg := utils.GetLogMsg(ctx)
 	u, p, _ := h.basicProxyAuth(req.Header.Get("Proxy-Authorization"), log)
 	defer func() {
-		fields := make(map[string]interface{}, 1)
-		fields["user"] = u
 		ctx = utils.SetLogMsg(ctx, logMsg)
-		log.WithFields(fields).Infof("%+v", logMsg)
+		log.Infof("user:%s", u)
 	}()
 	if auther := h.options.Auther; auther != nil {
 		// 需要认证

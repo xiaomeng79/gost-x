@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/go-gost/core/logger"
 	"github.com/go-gost/gosocks5"
@@ -50,12 +49,12 @@ func (h *socks5Handler) handleConnect(ctx context.Context, conn net.Conn, networ
 		return err
 	}
 
-	t := time.Now()
-	log.Infof("%s <-> %s", conn.RemoteAddr(), address)
+	// t := time.Now()
+	// log.Infof("%s <-> %s", conn.RemoteAddr(), address)
 	netpkg.Transport(conn, cc)
-	log.WithFields(map[string]any{
-		"duration": time.Since(t),
-	}).Infof("%s >-< %s", conn.RemoteAddr(), address)
+	// log.WithFields(map[string]any{
+	// 	"duration": time.Since(t),
+	// }).Infof("%s >-< %s", conn.RemoteAddr(), address)
 
 	return nil
 }

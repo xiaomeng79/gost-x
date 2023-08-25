@@ -1,14 +1,17 @@
 package config
 
 import (
-	"encoding/json"
 	"io"
 	"sync"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
+
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 var (
 	v = viper.GetViper()

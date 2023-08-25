@@ -53,7 +53,7 @@ func (s *serverSelector) Select(methods ...uint8) (method uint8) {
 }
 
 func (s *serverSelector) OnSelected(ctx context.Context, method uint8, conn net.Conn) (context.Context, net.Conn, error) {
-	_, requestid := utils.GetOrSetRequestID(context.Background())
+	_, requestid := utils.GetOrSetRequestID(ctx)
 	log := s.logger.WithFields(map[string]any{
 		"requestid": requestid,
 	})
@@ -61,7 +61,7 @@ func (s *serverSelector) OnSelected(ctx context.Context, method uint8, conn net.
 	logMsg := utils.GetLogMsg(ctx)
 	defer func() {
 		logMsg.UserId = id
-		log.Infof("%+v", logMsg)
+		// log.Infof("%+v", logMsg)
 		ctx = utils.SetLogMsg(ctx, logMsg)
 	}()
 	log.Debugf("%d %d", gosocks5.Ver5, method)

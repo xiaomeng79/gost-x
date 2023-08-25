@@ -10,6 +10,7 @@ import (
 	"github.com/go-gost/core/handler"
 	md "github.com/go-gost/core/metadata"
 	"github.com/go-gost/gosocks5"
+	proxyv1 "github.com/go-gost/x/gen/proto/go/proxy/v1"
 	"github.com/go-gost/x/internal/util/socks"
 	"github.com/go-gost/x/registry"
 	"github.com/go-gost/x/utils"
@@ -67,8 +68,6 @@ func (h *socks5Handler) Init(md md.Metadata) (err error) {
 func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handler.HandleOption) error {
 	defer conn.Close()
 	ctx, requestid := utils.GetOrSetRequestID(ctx)
-	start := time.Now()
-
 	remoteAddr := conn.RemoteAddr().String()
 	localAddr := conn.LocalAddr().String()
 
@@ -79,18 +78,15 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 	logMsg := utils.GetLogMsg(ctx)
 	logMsg.RequestId = requestid
 	logMsg.VpsId = h.md.VpsID
-	logMsg.OriginIp = remoteAddr
-	logMsg.OriginPort = remoteAddr
-	logMsg.ProxyIp = localAddr
-	logMsg.ProxyPort = localAddr
+	logMsg.OriginIp, logMsg.OriginPort, _ = net.SplitHostPort(remoteAddr)
+	logMsg.ProxyIp, logMsg.ProxyPort, _ = net.SplitHostPort(localAddr)
 	logMsg.StartTime = time.Now().UnixMilli()
 	ctx = utils.SetLogMsg(ctx, logMsg)
-	log.Infof("%+v", logMsg)
+	// log.Infof("%+v", logMsg)
 	defer func() {
 		logMsg.EndTime = time.Now().UnixMilli()
-		log.WithFields(map[string]any{
-			"duration": time.Since(start),
-		}).Infof("%+v", logMsg)
+		logMsg.Duration = logMsg.EndTime - logMsg.StartTime
+		log.Infof("%+v", logMsg)
 
 	}()
 
@@ -103,6 +99,7 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 	logMsg = utils.GetLogMsg(ctx)
 	req, err := gosocks5.ReadRequest(connServer)
 	if err != nil {
+		logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_TARGET
 		log.Error(err)
 		return err
 	}
@@ -110,8 +107,7 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 	conn.SetReadDeadline(time.Time{})
 
 	address := req.Addr.String()
-	logMsg.RemoteIp = address
-	logMsg.RemotePort = address
+	logMsg.RemoteIp, logMsg.RemotePort, _ = net.SplitHostPort(address)
 	logMsg.TargetUrl = address
 
 	switch req.Cmd {
