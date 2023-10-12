@@ -37,7 +37,9 @@ type ConfigServiceClient interface {
 	// 用户限流信息
 	GetUserLimiter(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*v1.UserLimiterResp, error)
 	// 获取当前的时间
-	GetCurrentTime(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*CurrentTime, error)
+	GetCurrentTime(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*v1.CurrentTime, error)
+	// 上报心跳
+	SetHeartbeat(ctx context.Context, in *v1.VpsHeartbeat, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type configServiceClient struct {
@@ -102,9 +104,18 @@ func (c *configServiceClient) GetUserLimiter(ctx context.Context, in *emptypb.Em
 	return out, nil
 }
 
-func (c *configServiceClient) GetCurrentTime(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*CurrentTime, error) {
-	out := new(CurrentTime)
+func (c *configServiceClient) GetCurrentTime(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*v1.CurrentTime, error) {
+	out := new(v1.CurrentTime)
 	err := c.cc.Invoke(ctx, "/config.v1.ConfigService/GetCurrentTime", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *configServiceClient) SetHeartbeat(ctx context.Context, in *v1.VpsHeartbeat, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/config.v1.ConfigService/SetHeartbeat", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +139,9 @@ type ConfigServiceServer interface {
 	// 用户限流信息
 	GetUserLimiter(context.Context, *emptypb.Empty) (*v1.UserLimiterResp, error)
 	// 获取当前的时间
-	GetCurrentTime(context.Context, *emptypb.Empty) (*CurrentTime, error)
+	GetCurrentTime(context.Context, *emptypb.Empty) (*v1.CurrentTime, error)
+	// 上报心跳
+	SetHeartbeat(context.Context, *v1.VpsHeartbeat) (*emptypb.Empty, error)
 }
 
 // UnimplementedConfigServiceServer should be embedded to have forward compatible implementations.
@@ -153,8 +166,11 @@ func (UnimplementedConfigServiceServer) GetUserAuth(context.Context, *emptypb.Em
 func (UnimplementedConfigServiceServer) GetUserLimiter(context.Context, *emptypb.Empty) (*v1.UserLimiterResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserLimiter not implemented")
 }
-func (UnimplementedConfigServiceServer) GetCurrentTime(context.Context, *emptypb.Empty) (*CurrentTime, error) {
+func (UnimplementedConfigServiceServer) GetCurrentTime(context.Context, *emptypb.Empty) (*v1.CurrentTime, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCurrentTime not implemented")
+}
+func (UnimplementedConfigServiceServer) SetHeartbeat(context.Context, *v1.VpsHeartbeat) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetHeartbeat not implemented")
 }
 
 // UnsafeConfigServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -294,6 +310,24 @@ func _ConfigService_GetCurrentTime_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ConfigService_SetHeartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(v1.VpsHeartbeat)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConfigServiceServer).SetHeartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/config.v1.ConfigService/SetHeartbeat",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConfigServiceServer).SetHeartbeat(ctx, req.(*v1.VpsHeartbeat))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ConfigService_ServiceDesc is the grpc.ServiceDesc for ConfigService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -328,6 +362,10 @@ var ConfigService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetCurrentTime",
 			Handler:    _ConfigService_GetCurrentTime_Handler,
+		},
+		{
+			MethodName: "SetHeartbeat",
+			Handler:    _ConfigService_SetHeartbeat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

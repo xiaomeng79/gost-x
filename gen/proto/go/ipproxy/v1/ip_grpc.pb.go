@@ -8,7 +8,6 @@ package ipproxyv1
 
 import (
 	context "context"
-	v1 "github.com/go-gost/x/gen/proto/go/proxy/v1"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -24,7 +23,9 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type IpProxyServiceClient interface {
 	// 获取订单ip
-	GetIp(ctx context.Context, in *GetIpReq, opts ...grpc.CallOption) (*v1.IpInfoResp, error)
+	GetIp(ctx context.Context, in *GetIpReq, opts ...grpc.CallOption) (*GetIpResp, error)
+	// 获取vps的心跳
+	GetVpsHeartbeat(ctx context.Context, in *GetVpsHeartbeatReq, opts ...grpc.CallOption) (*GetVpsHeartbeatResp, error)
 }
 
 type ipProxyServiceClient struct {
@@ -35,9 +36,18 @@ func NewIpProxyServiceClient(cc grpc.ClientConnInterface) IpProxyServiceClient {
 	return &ipProxyServiceClient{cc}
 }
 
-func (c *ipProxyServiceClient) GetIp(ctx context.Context, in *GetIpReq, opts ...grpc.CallOption) (*v1.IpInfoResp, error) {
-	out := new(v1.IpInfoResp)
+func (c *ipProxyServiceClient) GetIp(ctx context.Context, in *GetIpReq, opts ...grpc.CallOption) (*GetIpResp, error) {
+	out := new(GetIpResp)
 	err := c.cc.Invoke(ctx, "/ipproxy.v1.IpProxyService/GetIp", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ipProxyServiceClient) GetVpsHeartbeat(ctx context.Context, in *GetVpsHeartbeatReq, opts ...grpc.CallOption) (*GetVpsHeartbeatResp, error) {
+	out := new(GetVpsHeartbeatResp)
+	err := c.cc.Invoke(ctx, "/ipproxy.v1.IpProxyService/GetVpsHeartbeat", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -49,15 +59,20 @@ func (c *ipProxyServiceClient) GetIp(ctx context.Context, in *GetIpReq, opts ...
 // for forward compatibility
 type IpProxyServiceServer interface {
 	// 获取订单ip
-	GetIp(context.Context, *GetIpReq) (*v1.IpInfoResp, error)
+	GetIp(context.Context, *GetIpReq) (*GetIpResp, error)
+	// 获取vps的心跳
+	GetVpsHeartbeat(context.Context, *GetVpsHeartbeatReq) (*GetVpsHeartbeatResp, error)
 }
 
 // UnimplementedIpProxyServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedIpProxyServiceServer struct {
 }
 
-func (UnimplementedIpProxyServiceServer) GetIp(context.Context, *GetIpReq) (*v1.IpInfoResp, error) {
+func (UnimplementedIpProxyServiceServer) GetIp(context.Context, *GetIpReq) (*GetIpResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetIp not implemented")
+}
+func (UnimplementedIpProxyServiceServer) GetVpsHeartbeat(context.Context, *GetVpsHeartbeatReq) (*GetVpsHeartbeatResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVpsHeartbeat not implemented")
 }
 
 // UnsafeIpProxyServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -89,6 +104,24 @@ func _IpProxyService_GetIp_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IpProxyService_GetVpsHeartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVpsHeartbeatReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IpProxyServiceServer).GetVpsHeartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ipproxy.v1.IpProxyService/GetVpsHeartbeat",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IpProxyServiceServer).GetVpsHeartbeat(ctx, req.(*GetVpsHeartbeatReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IpProxyService_ServiceDesc is the grpc.ServiceDesc for IpProxyService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -99,6 +132,10 @@ var IpProxyService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetIp",
 			Handler:    _IpProxyService_GetIp_Handler,
+		},
+		{
+			MethodName: "GetVpsHeartbeat",
+			Handler:    _IpProxyService_GetVpsHeartbeat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
