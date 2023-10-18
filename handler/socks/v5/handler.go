@@ -13,6 +13,7 @@ import (
 	proxyv1 "github.com/go-gost/x/gen/proto/go/proxy/v1"
 	"github.com/go-gost/x/internal/util/socks"
 	"github.com/go-gost/x/registry"
+	"github.com/go-gost/x/report"
 	"github.com/go-gost/x/utils"
 )
 
@@ -30,6 +31,7 @@ type socks5Handler struct {
 	router   *chain.Router
 	md       metadata
 	options  handler.Options
+	cli      *report.CollectService
 }
 
 func NewHandler(opts ...handler.Option) handler.Handler {
@@ -61,8 +63,17 @@ func (h *socks5Handler) Init(md md.Metadata) (err error) {
 		md:            h.md,
 		rateLimiter:   h.options.RateLimiter,
 	}
-
+	// 初始化日志上报
+	if len(h.md.LogServiceAddr) != 0 {
+		h.cli = report.NewReportService(2048, 5, h.md.LogServiceAddr)
+	}
 	return
+}
+
+func (h *socks5Handler) recordLog(msg *proxyv1.LogMsg) {
+	if h.cli != nil {
+		h.cli.Receive(msg)
+	}
 }
 
 func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handler.HandleOption) error {
@@ -81,12 +92,14 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 	logMsg.OriginIp, logMsg.OriginPort, _ = net.SplitHostPort(remoteAddr)
 	logMsg.ProxyIp, logMsg.ProxyPort, _ = net.SplitHostPort(localAddr)
 	logMsg.StartTime = time.Now().UnixMilli()
+	logMsg.ProtocolType = proxyv1.ProtocolType_PROTOCOL_TYPE_SOCKS5
 	ctx = utils.SetLogMsg(ctx, logMsg)
 	// log.Infof("%+v", logMsg)
 	defer func() {
 		logMsg.EndTime = time.Now().UnixMilli()
-		logMsg.Duration = logMsg.EndTime - logMsg.StartTime
-		log.Infof("%+v", logMsg)
+		logMsg.Duration = int32(logMsg.EndTime - logMsg.StartTime)
+		h.recordLog(logMsg)
+		log.Infof("ss:%+v", logMsg)
 
 	}()
 

@@ -60,7 +60,7 @@ func (s *serverSelector) OnSelected(ctx context.Context, method uint8, conn net.
 	var id int64
 	logMsg := utils.GetLogMsg(ctx)
 	defer func() {
-		logMsg.UserId = id
+		logMsg.UserId = int32(id)
 		// log.Infof("%+v", logMsg)
 		ctx = utils.SetLogMsg(ctx, logMsg)
 	}()

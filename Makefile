@@ -19,5 +19,5 @@ gen-local: install
 	buf generate ../ip-proxy-apis
 	protoc-go-inject-tag -input="${GEN_PROTO_PATH}/proxy/v1/*.pb.go"
 	protoc-go-inject-tag -input="${GEN_PROTO_PATH}/config/v1/*.pb.go"
-	protoc-go-inject-tag -input="${GEN_PROTO_PATH}/report/v1/*.pb.go"
+	protoc-go-inject-tag -input="${GEN_PROTO_PATH}/collect/v1/*.pb.go"
 

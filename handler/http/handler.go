@@ -26,6 +26,7 @@ import (
 	netpkg "github.com/go-gost/x/internal/net"
 	sx "github.com/go-gost/x/internal/util/selector"
 	"github.com/go-gost/x/registry"
+	"github.com/go-gost/x/report"
 	"github.com/go-gost/x/utils"
 )
 
@@ -37,6 +38,7 @@ type httpHandler struct {
 	router  *chain.Router
 	md      metadata
 	options handler.Options
+	cli     *report.CollectService
 }
 
 func NewHandler(opts ...handler.Option) handler.Handler {
@@ -59,8 +61,17 @@ func (h *httpHandler) Init(md md.Metadata) error {
 	if h.router == nil {
 		h.router = chain.NewRouter(chain.LoggerRouterOption(h.options.Logger))
 	}
-
+	// 初始化日志上报
+	if len(h.md.LogServiceAddr) != 0 {
+		h.cli = report.NewReportService(2048, 5, h.md.LogServiceAddr)
+	}
 	return nil
+}
+
+func (h *httpHandler) recordLog(msg *proxyv1.LogMsg) {
+	if h.cli != nil {
+		h.cli.Receive(msg)
+	}
 }
 
 func (h *httpHandler) Handle(ctx context.Context, conn net.Conn, opts ...handler.HandleOption) error {
@@ -79,6 +90,7 @@ func (h *httpHandler) Handle(ctx context.Context, conn net.Conn, opts ...handler
 	logMsg.OriginIp, logMsg.OriginPort, _ = net.SplitHostPort(remoteAddr)
 	logMsg.ProxyIp, logMsg.ProxyPort, _ = net.SplitHostPort(localAddr)
 	logMsg.StartTime = time.Now().UnixMilli()
+	logMsg.ProtocolType = proxyv1.ProtocolType_PROTOCOL_TYPE_HTTP
 	ctx = utils.SetLogMsg(ctx, logMsg)
 
 	req, err := http.ReadRequest(bufio.NewReader(conn))
@@ -99,8 +111,9 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 	logMsg := utils.GetLogMsg(ctx)
 	defer func() {
 		logMsg.EndTime = time.Now().UnixMilli()
-		logMsg.Duration = logMsg.EndTime - logMsg.StartTime
-		log.Infof("%+v", logMsg)
+		logMsg.Duration = int32(logMsg.EndTime - logMsg.StartTime)
+		h.recordLog(logMsg)
+		log.Infof("http:%+v", logMsg)
 	}()
 	if !req.URL.IsAbs() && govalidator.IsDNSName(req.Host) {
 		req.URL.Scheme = "http"
@@ -173,7 +186,7 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 		return nil
 	}
 	userID := logMsg.UserId
-	if !h.checkRateLimit(strconv.FormatInt(userID, 10)) {
+	if !h.checkRateLimit(strconv.Itoa(int(userID))) {
 		// 限流没通过
 		log.Warnf("触发限流:user_id:%d", userID)
 		logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_LIMIT
@@ -301,7 +314,7 @@ func (h *httpHandler) authenticate(ctx context.Context, conn net.Conn, req *http
 		// 获取id
 		id := h.options.Auther.Authenticate(ctx, u, p)
 		if id != auth.AUTH_NOT_PASSED {
-			logMsg.UserId = id
+			logMsg.UserId = int32(id)
 			return ctx, true
 		}
 		// 使用ip认证
@@ -309,7 +322,7 @@ func (h *httpHandler) authenticate(ctx context.Context, conn net.Conn, req *http
 		id = auther.Authenticate(ctx, host, "")
 
 		if id != auth.AUTH_NOT_PASSED {
-			logMsg.UserId = id
+			logMsg.UserId = int32(id)
 			return ctx, true
 		}
 	}

@@ -11,13 +11,13 @@ const (
 )
 
 type Metadata struct {
-	VpsID          int64
-	logServiceAddr string
+	VpsID          int32
+	LogServiceAddr string
 }
 
 func ParseMetadata(md mdata.Metadata) Metadata {
 	m := Metadata{}
-	m.VpsID = int64(mdutil.GetInt(md, vpsID))
-	m.logServiceAddr = mdutil.GetString(md, logService)
+	m.VpsID = int32(mdutil.GetInt(md, vpsID))
+	m.LogServiceAddr = mdutil.GetString(md, logService)
 	return m
 }
