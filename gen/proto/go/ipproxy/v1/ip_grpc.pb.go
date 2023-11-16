@@ -22,8 +22,10 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type IpProxyServiceClient interface {
-	// 获取订单ip
-	GetIp(ctx context.Context, in *GetIpReq, opts ...grpc.CallOption) (*GetIpResp, error)
+	// 获取订单ip，使用json格式
+	GetIpJson(ctx context.Context, in *GetIpReq, opts ...grpc.CallOption) (*GetIpJsonResp, error)
+	// 获取订单ip，使用text
+	GetIpText(ctx context.Context, in *GetIpReq, opts ...grpc.CallOption) (*GetIpTextResp, error)
 	// 获取vps的心跳
 	GetVpsHeartbeat(ctx context.Context, in *GetVpsHeartbeatReq, opts ...grpc.CallOption) (*GetVpsHeartbeatResp, error)
 }
@@ -36,9 +38,18 @@ func NewIpProxyServiceClient(cc grpc.ClientConnInterface) IpProxyServiceClient {
 	return &ipProxyServiceClient{cc}
 }
 
-func (c *ipProxyServiceClient) GetIp(ctx context.Context, in *GetIpReq, opts ...grpc.CallOption) (*GetIpResp, error) {
-	out := new(GetIpResp)
-	err := c.cc.Invoke(ctx, "/ipproxy.v1.IpProxyService/GetIp", in, out, opts...)
+func (c *ipProxyServiceClient) GetIpJson(ctx context.Context, in *GetIpReq, opts ...grpc.CallOption) (*GetIpJsonResp, error) {
+	out := new(GetIpJsonResp)
+	err := c.cc.Invoke(ctx, "/ipproxy.v1.IpProxyService/GetIpJson", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ipProxyServiceClient) GetIpText(ctx context.Context, in *GetIpReq, opts ...grpc.CallOption) (*GetIpTextResp, error) {
+	out := new(GetIpTextResp)
+	err := c.cc.Invoke(ctx, "/ipproxy.v1.IpProxyService/GetIpText", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -58,8 +69,10 @@ func (c *ipProxyServiceClient) GetVpsHeartbeat(ctx context.Context, in *GetVpsHe
 // All implementations should embed UnimplementedIpProxyServiceServer
 // for forward compatibility
 type IpProxyServiceServer interface {
-	// 获取订单ip
-	GetIp(context.Context, *GetIpReq) (*GetIpResp, error)
+	// 获取订单ip，使用json格式
+	GetIpJson(context.Context, *GetIpReq) (*GetIpJsonResp, error)
+	// 获取订单ip，使用text
+	GetIpText(context.Context, *GetIpReq) (*GetIpTextResp, error)
 	// 获取vps的心跳
 	GetVpsHeartbeat(context.Context, *GetVpsHeartbeatReq) (*GetVpsHeartbeatResp, error)
 }
@@ -68,8 +81,11 @@ type IpProxyServiceServer interface {
 type UnimplementedIpProxyServiceServer struct {
 }
 
-func (UnimplementedIpProxyServiceServer) GetIp(context.Context, *GetIpReq) (*GetIpResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetIp not implemented")
+func (UnimplementedIpProxyServiceServer) GetIpJson(context.Context, *GetIpReq) (*GetIpJsonResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetIpJson not implemented")
+}
+func (UnimplementedIpProxyServiceServer) GetIpText(context.Context, *GetIpReq) (*GetIpTextResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetIpText not implemented")
 }
 func (UnimplementedIpProxyServiceServer) GetVpsHeartbeat(context.Context, *GetVpsHeartbeatReq) (*GetVpsHeartbeatResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVpsHeartbeat not implemented")
@@ -86,20 +102,38 @@ func RegisterIpProxyServiceServer(s grpc.ServiceRegistrar, srv IpProxyServiceSer
 	s.RegisterService(&IpProxyService_ServiceDesc, srv)
 }
 
-func _IpProxyService_GetIp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _IpProxyService_GetIpJson_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetIpReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IpProxyServiceServer).GetIp(ctx, in)
+		return srv.(IpProxyServiceServer).GetIpJson(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ipproxy.v1.IpProxyService/GetIp",
+		FullMethod: "/ipproxy.v1.IpProxyService/GetIpJson",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IpProxyServiceServer).GetIp(ctx, req.(*GetIpReq))
+		return srv.(IpProxyServiceServer).GetIpJson(ctx, req.(*GetIpReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IpProxyService_GetIpText_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetIpReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IpProxyServiceServer).GetIpText(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ipproxy.v1.IpProxyService/GetIpText",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IpProxyServiceServer).GetIpText(ctx, req.(*GetIpReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -130,8 +164,12 @@ var IpProxyService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*IpProxyServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetIp",
-			Handler:    _IpProxyService_GetIp_Handler,
+			MethodName: "GetIpJson",
+			Handler:    _IpProxyService_GetIpJson_Handler,
+		},
+		{
+			MethodName: "GetIpText",
+			Handler:    _IpProxyService_GetIpText_Handler,
 		},
 		{
 			MethodName: "GetVpsHeartbeat",
