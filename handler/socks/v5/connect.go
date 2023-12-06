@@ -48,10 +48,10 @@ func (h *socks5Handler) handleConnect(ctx context.Context, conn net.Conn, networ
 		log.Error(err)
 		return err
 	}
-
+	ctx = utils.SetLog(ctx, log)
 	// t := time.Now()
 	// log.Infof("%s <-> %s", conn.RemoteAddr(), address)
-	netpkg.Transport(conn, cc)
+	netpkg.TransportSize(ctx, conn, cc)
 	// log.WithFields(map[string]any{
 	// 	"duration": time.Since(t),
 	// }).Infof("%s >-< %s", conn.RemoteAddr(), address)

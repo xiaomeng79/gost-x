@@ -3,7 +3,9 @@ package utils
 import (
 	"context"
 
+	"github.com/go-gost/core/logger"
 	proxyv1 "github.com/go-gost/x/gen/proto/go/proxy/v1"
+	"github.com/go-gost/x/report"
 	"github.com/google/uuid"
 )
 
@@ -46,4 +48,32 @@ func GetLogMsg(ctx context.Context) *proxyv1.LogMsg {
 
 func SetLogMsg(ctx context.Context, msg *proxyv1.LogMsg) context.Context {
 	return context.WithValue(ctx, logMsg{}, msg)
+}
+
+type log struct{}
+
+func GetLog(ctx context.Context) logger.Logger {
+	if val := ctx.Value(log{}); val != nil {
+		if value, ok := val.(logger.Logger); ok {
+			return value
+		}
+	}
+	return logger.Default()
+}
+func SetLog(ctx context.Context, l logger.Logger) context.Context {
+	return context.WithValue(ctx, log{}, l)
+}
+
+type logCli struct{}
+
+func GetLogCli(ctx context.Context) *report.CollectService {
+	if val := ctx.Value(logCli{}); val != nil {
+		if value, ok := val.(*report.CollectService); ok {
+			return value
+		}
+	}
+	return nil
+}
+func SetLogCli(ctx context.Context, l *report.CollectService) context.Context {
+	return context.WithValue(ctx, logCli{}, l)
 }

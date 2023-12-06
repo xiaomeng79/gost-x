@@ -96,10 +96,12 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 	ctx = utils.SetLogMsg(ctx, logMsg)
 	// log.Infof("%+v", logMsg)
 	defer func() {
-		logMsg.EndTime = time.Now().UnixMilli()
-		logMsg.Duration = int32(logMsg.EndTime - logMsg.StartTime)
-		h.recordLog(logMsg)
-		log.Infof("ss:%+v", logMsg)
+		if logMsg.ErrCode != proxyv1.LogErrCode_LOG_ERR_CODE_OK {
+			logMsg.EndTime = time.Now().UnixMilli()
+			logMsg.Duration = int32(logMsg.EndTime - logMsg.StartTime)
+			h.recordLog(logMsg)
+			log.Infof("s5 error:%+v", logMsg)
+		}
 
 	}()
 
@@ -122,7 +124,8 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 	address := req.Addr.String()
 	logMsg.RemoteIp, logMsg.RemotePort, _ = net.SplitHostPort(address)
 	logMsg.TargetUrl = address
-
+	ctx = utils.SetLogCli(ctx, h.cli)
+	ctx = utils.SetLogMsg(ctx, logMsg)
 	switch req.Cmd {
 	case gosocks5.CmdConnect:
 		return h.handleConnect(ctx, conn, "tcp", address, log)

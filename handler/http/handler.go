@@ -110,10 +110,12 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 	})
 	logMsg := utils.GetLogMsg(ctx)
 	defer func() {
-		logMsg.EndTime = time.Now().UnixMilli()
-		logMsg.Duration = int32(logMsg.EndTime - logMsg.StartTime)
-		h.recordLog(logMsg)
-		log.Infof("http:%+v", logMsg)
+		if logMsg.ErrCode != proxyv1.LogErrCode_LOG_ERR_CODE_OK {
+			logMsg.EndTime = time.Now().UnixMilli()
+			logMsg.Duration = int32(logMsg.EndTime - logMsg.StartTime)
+			h.recordLog(logMsg)
+			log.Infof("http:%+v", logMsg)
+		}
 	}()
 	if !req.URL.IsAbs() && govalidator.IsDNSName(req.Host) {
 		req.URL.Scheme = "http"
@@ -253,8 +255,11 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 			return err
 		}
 	}
+
+	ctx =utils.SetLogCli(ctx,h.cli)
 	// log.Infof("%s <-> %s", conn.RemoteAddr(), addr)
-	netpkg.Transport(conn, cc)
+	// netpkg.Transport(conn, cc)
+	netpkg.TransportSize(ctx, conn, cc)
 
 	return nil
 }
