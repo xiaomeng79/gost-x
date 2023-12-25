@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -110,7 +111,7 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 	})
 	logMsg := utils.GetLogMsg(ctx)
 	defer func() {
-		if logMsg.ErrCode != proxyv1.LogErrCode_LOG_ERR_CODE_OK {
+		if logMsg.ErrCode != proxyv1.LogErrCode_LOG_ERR_CODE_OK && logMsg.ErrCode != proxyv1.LogErrCode_LOG_ERR_CODE_IGNORE {
 			logMsg.EndTime = time.Now().UnixMilli()
 			logMsg.Duration = int32(logMsg.EndTime - logMsg.StartTime)
 			h.recordLog(logMsg)
@@ -224,12 +225,16 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 
 	cc, err := h.router.Dial(ctx, network, addr)
 	if err != nil {
-		resp.StatusCode = http.StatusServiceUnavailable
-		logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_TARGET
-		log.Errorf("router dial err:%+v,logMsg:%+v", err, logMsg)
-		if log.IsLevelEnabled(logger.TraceLevel) {
-			dump, _ := httputil.DumpResponse(resp, false)
-			log.Trace(string(dump))
+		if err == io.EOF {
+			logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_IGNORE
+		} else {
+			resp.StatusCode = http.StatusServiceUnavailable
+			logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_TARGET
+			log.Errorf("router dial err:%+v,logMsg:%+v", err, logMsg)
+			if log.IsLevelEnabled(logger.TraceLevel) {
+				dump, _ := httputil.DumpResponse(resp, false)
+				log.Trace(string(dump))
+			}
 		}
 		resp.Write(conn)
 		return err
@@ -256,7 +261,7 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 		}
 	}
 
-	ctx =utils.SetLogCli(ctx,h.cli)
+	ctx = utils.SetLogCli(ctx, h.cli)
 	// log.Infof("%s <-> %s", conn.RemoteAddr(), addr)
 	// netpkg.Transport(conn, cc)
 	netpkg.TransportSize(ctx, conn, cc)

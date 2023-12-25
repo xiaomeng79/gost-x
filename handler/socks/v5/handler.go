@@ -3,6 +3,7 @@ package v5
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"time"
 
@@ -96,7 +97,7 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 	ctx = utils.SetLogMsg(ctx, logMsg)
 	// log.Infof("%+v", logMsg)
 	defer func() {
-		if logMsg.ErrCode != proxyv1.LogErrCode_LOG_ERR_CODE_OK {
+		if logMsg.ErrCode != proxyv1.LogErrCode_LOG_ERR_CODE_OK && logMsg.ErrCode != proxyv1.LogErrCode_LOG_ERR_CODE_IGNORE {
 			logMsg.EndTime = time.Now().UnixMilli()
 			logMsg.Duration = int32(logMsg.EndTime - logMsg.StartTime)
 			h.recordLog(logMsg)
@@ -114,8 +115,12 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 	logMsg = utils.GetLogMsg(ctx)
 	req, err := gosocks5.ReadRequest(connServer)
 	if err != nil {
-		logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_TARGET
-		log.Error(err)
+		if err == io.EOF {
+			logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_IGNORE
+		} else {
+			logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_TARGET
+			log.Error(err)
+		}
 		return err
 	}
 	log.Trace(req)
