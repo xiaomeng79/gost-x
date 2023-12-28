@@ -2,8 +2,6 @@ package report
 
 import (
 	"context"
-	"log"
-	"sync"
 	"time"
 
 	collectv1 "github.com/go-gost/x/gen/proto/go/collect/v1"
@@ -12,10 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-)
-
-var (
-	once sync.Once
 )
 
 const (
@@ -40,6 +34,12 @@ type CollectService struct {
 	reportCh chan struct{}
 	// GRPC 客户端
 	c collectv1.CollectServiceClient
+	// GRPC 客户端连接
+	conn *grpc.ClientConn
+	// logger
+	logger *logrus.Entry
+	// grpc 地址
+	addr string
 }
 
 // 初始化日志服务
@@ -56,28 +56,40 @@ func NewReportService(l, rt int, addr string) *CollectService {
 	}
 
 	logger.Infof("grpc上报数据长度:%d,上报时间:%ds,上报地址:%s\n", l, rt, addr)
-	// 客户端
-	conn, err := grpc.Dial(
-		addr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(
-			timeout.UnaryClientInterceptor(8*time.Second)),
-	)
-	if err != nil {
-		logger.Errorf("日志上报服务异常 addr:%s,err:%+v", addr, err)
-		return nil
-	}
-	c := collectv1.NewCollectServiceClient(conn)
 	s := &CollectService{
 		len:        l,
 		reportLen:  l >> 1,
 		ch:         make(chan *proxyv1.LogMsg, l),
 		reportTime: rt,
 		reportCh:   make(chan struct{}, 1),
-		c:          c,
+		logger:     logger,
+		addr:       addr,
 	}
+	// 客户端
+	s.rebuildClient()
+
 	go s.selectSend()
 	return s
+}
+
+// 重新构建客户端
+func (l *CollectService) rebuildClient() {
+	if l.conn != nil {
+		_ = l.conn.Close()
+	}
+	// 客户端
+	conn, err := grpc.Dial(
+		l.addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(
+			timeout.UnaryClientInterceptor(5*time.Second)),
+	)
+	if err != nil {
+		l.logger.Errorf("日志上报服务异常 addr:%s,err:%+v", l.addr, err)
+	}
+	c := collectv1.NewCollectServiceClient(conn)
+	l.conn = conn
+	l.c = c
 }
 
 // 接受数据
@@ -90,6 +102,14 @@ func (l *CollectService) Receive(data *proxyv1.LogMsg) {
 	l.ch <- data
 	if curLen >= l.reportLen {
 		l.reportCh <- struct{}{}
+	}
+}
+
+func (l *CollectService) reportLogRetry(ctx context.Context, events []*proxyv1.LogMsg) {
+	for i := 1; i <= 4; i++ {
+		time.Sleep(time.Second * 5 * time.Duration(i))
+		// 重试
+		_, _ = l.c.ReportLog(ctx, &collectv1.Logs{Data: events})
 	}
 }
 
@@ -107,9 +127,10 @@ func (l *CollectService) send() {
 	defer cancel()
 	_, err := l.c.ReportLog(ctx, &collectv1.Logs{Data: events})
 	if err != nil {
-		once.Do(func() {
-			log.Printf("grpc log send err:%+v\n", err)
-		})
+		l.logger.Errorf("grpc log send err:%+v\n", err)
+		l.rebuildClient()
+		// 重试
+		go l.reportLogRetry(ctx, events)
 	}
 }
 

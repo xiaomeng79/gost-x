@@ -86,8 +86,8 @@ type UserAuth struct {
 	// @gotags: db:"ip_or_name" default:"ipproxy"
 	IpOrName string `protobuf:"bytes,2,opt,name=ip_or_name,json=ipOrName,proto3" json:"ip_or_name,omitempty" db:"ip_or_name" default:"ipproxy"`
 	// 密码
-	// @gotags: db:"auth_password" default:"ipproxy"
-	AuthPassword string `protobuf:"bytes,3,opt,name=auth_password,json=authPassword,proto3" json:"auth_password,omitempty" db:"auth_password" default:"ipproxy"`
+	// @gotags: db:"auth_password" default:"c227135c0f1c6f6d7d5a4acc891c86a2"
+	AuthPassword string `protobuf:"bytes,3,opt,name=auth_password,json=authPassword,proto3" json:"auth_password,omitempty" db:"auth_password" default:"c227135c0f1c6f6d7d5a4acc891c86a2"`
 	// 授权类型
 	// @gotags: db:"auth_type" default:"2"
 	AuthType UserAuthType `protobuf:"varint,4,opt,name=auth_type,json=authType,proto3,enum=proxy.v1.UserAuthType" json:"auth_type,omitempty" db:"auth_type" default:"2"`
