@@ -96,7 +96,9 @@ func (h *httpHandler) Handle(ctx context.Context, conn net.Conn, opts ...handler
 
 	req, err := http.ReadRequest(bufio.NewReader(conn))
 	if err != nil {
-		log.Errorf("err:%+v,logMsg:%+v", err, logMsg)
+		if err != io.EOF {
+			log.Errorf("err:%+v,logMsg:%+v", err, logMsg)
+		}
 		return err
 	}
 	defer req.Body.Close()

@@ -188,10 +188,12 @@ func (s *defaultService) Serve() error {
 			ctx = ContextWithSid(ctx, xid.New().String())
 
 			if err := s.handler.Handle(ctx, conn); err != nil {
-				s.options.logger.Error(err)
-				if v := xmetrics.GetCounter(xmetrics.MetricServiceHandlerErrorsCounter,
-					metrics.Labels{"service": s.name, "client": host}); v != nil {
-					v.Inc()
+				if err != io.EOF {
+					s.options.logger.Error(err)
+					if v := xmetrics.GetCounter(xmetrics.MetricServiceHandlerErrorsCounter,
+						metrics.Labels{"service": s.name, "client": host}); v != nil {
+						v.Inc()
+					}
 				}
 			}
 		}()

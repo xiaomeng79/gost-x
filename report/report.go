@@ -109,7 +109,10 @@ func (l *CollectService) reportLogRetry(ctx context.Context, events []*proxyv1.L
 	for i := 1; i <= 4; i++ {
 		time.Sleep(time.Second * 5 * time.Duration(i))
 		// 重试
-		_, _ = l.c.ReportLog(ctx, &collectv1.Logs{Data: events})
+		_, err := l.c.ReportLog(ctx, &collectv1.Logs{Data: events})
+		if err == nil {
+			return
+		}
 	}
 }
 
