@@ -66,7 +66,7 @@ func (h *socks5Handler) Init(md md.Metadata) (err error) {
 	}
 	// 初始化日志上报
 	if len(h.md.LogServiceAddr) != 0 {
-		h.cli = report.NewReportService(2048, 5, h.md.LogServiceAddr)
+		h.cli = report.GetReportService(h.md.LogServiceAddr)
 	}
 	return
 }
@@ -97,13 +97,20 @@ func (h *socks5Handler) Handle(ctx context.Context, conn net.Conn, opts ...handl
 	ctx = utils.SetLogMsg(ctx, logMsg)
 	// log.Infof("%+v", logMsg)
 	defer func() {
-		if logMsg.ErrCode != proxyv1.LogErrCode_LOG_ERR_CODE_OK && logMsg.ErrCode != proxyv1.LogErrCode_LOG_ERR_CODE_IGNORE {
-			logMsg.EndTime = time.Now().UnixMilli()
-			logMsg.Duration = int32(logMsg.EndTime - logMsg.StartTime)
-			h.recordLog(logMsg)
-			log.Infof("s5 error:%+v", logMsg)
+		if logMsg.ErrCode == proxyv1.LogErrCode_LOG_ERR_CODE_OK {
+			return
 		}
-
+		if logMsg.ErrCode == proxyv1.LogErrCode_LOG_ERR_CODE_IGNORE {
+			if logMsg.UserId > 0 {
+				logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_TARGET
+			} else {
+				return
+			}
+		}
+		logMsg.EndTime = time.Now().UnixMilli()
+		logMsg.Duration = int32(logMsg.EndTime - logMsg.StartTime)
+		h.recordLog(logMsg)
+		log.Infof("s5:%+v", logMsg)
 	}()
 
 	if h.md.readTimeout > 0 {

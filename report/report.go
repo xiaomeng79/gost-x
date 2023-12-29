@@ -15,9 +15,19 @@ import (
 const (
 	// 数据最大长度
 	MAX_DATA_LEN = 1 << 11
-
 	// 最大上报时间，秒
 	MAX_REPORT_TIME = 10
+)
+
+const (
+	// 默认长度
+	DEFAULT_DATA_LEN = 2048
+	// 默认上报时间
+	DEFAULT_REPORT_TIME = 5
+)
+
+var (
+	cs *CollectService
 )
 
 // 处理用户上报日志服务
@@ -40,10 +50,25 @@ type CollectService struct {
 	logger *logrus.Entry
 	// grpc 地址
 	addr string
+	// 关闭
+	closeCh chan struct{}
+}
+
+// 获取上报日志服务
+func GetReportService(addr string) *CollectService {
+	if cs == nil {
+		cs = newReportService(DEFAULT_DATA_LEN, DEFAULT_REPORT_TIME, addr)
+	}
+	if addr != cs.addr {
+		csCopy := cs
+		go csCopy.closed()
+		cs = newReportService(DEFAULT_DATA_LEN, DEFAULT_REPORT_TIME, addr)
+	}
+	return cs
 }
 
 // 初始化日志服务
-func NewReportService(l, rt int, addr string) *CollectService {
+func newReportService(l, rt int, addr string) *CollectService {
 	logger := logrus.WithFields(map[string]any{
 		"service":   "gRPC/client",
 		"component": "ip-proxy-report",
@@ -105,11 +130,16 @@ func (l *CollectService) Receive(data *proxyv1.LogMsg) {
 	}
 }
 
-func (l *CollectService) reportLogRetry(ctx context.Context, events []*proxyv1.LogMsg) {
-	for i := 1; i <= 4; i++ {
+func (l *CollectService) reportLogRetry(events []*proxyv1.LogMsg) {
+	defer func() {
+		if r := recover(); r != nil {
+			l.logger.Errorf("panic:reportLogRetry:%+v", r)
+		}
+	}()
+	for i := 1; i <= 6; i++ {
 		time.Sleep(time.Second * 5 * time.Duration(i))
 		// 重试
-		_, err := l.c.ReportLog(ctx, &collectv1.Logs{Data: events})
+		err := l.reportLog(events)
 		if err == nil {
 			return
 		}
@@ -125,25 +155,52 @@ func (l *CollectService) send() {
 	for i := 0; i < ll; i++ {
 		events = append(events, <-l.ch)
 	}
-	clientDeadline := time.Now().Add(time.Duration(3 * time.Second))
-	ctx, cancel := context.WithDeadline(context.Background(), clientDeadline)
-	defer cancel()
-	_, err := l.c.ReportLog(ctx, &collectv1.Logs{Data: events})
+	err := l.reportLog(events)
 	if err != nil {
 		l.logger.Errorf("grpc log send err:%+v\n", err)
 		l.rebuildClient()
 		// 重试
-		go l.reportLogRetry(ctx, events)
+		go l.reportLogRetry(events)
 	}
 }
 
 func (l *CollectService) selectSend() {
+	defer func() {
+		if r := recover(); r != nil {
+			l.logger.Errorf("panic:selectSend:%+v", r)
+		}
+	}()
 	for {
 		select {
 		case <-time.After(time.Second * time.Duration(l.reportTime)):
 			l.send()
 		case <-l.reportCh:
 			l.send()
+		case <-l.closeCh:
+			l.send()
+			return
 		}
 	}
+}
+
+func (l *CollectService) closed() {
+	defer func() {
+		if r := recover(); r != nil {
+			l.logger.Errorf("panic:closed:%+v", r)
+		}
+	}()
+	l.closeCh <- struct{}{}
+	time.After(time.Second * 10)
+	if l.conn != nil {
+		_ = l.conn.Close()
+	}
+}
+
+func (l *CollectService) reportLog(events []*proxyv1.LogMsg) error {
+	// 超时控制
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	// 重试
+	_, err := l.c.ReportLog(ctx, &collectv1.Logs{Data: events})
+	return err
 }

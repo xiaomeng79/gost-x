@@ -35,6 +35,11 @@ func init() {
 	registry.HandlerRegistry().Register("http", NewHandler)
 }
 
+var (
+	logAddr string
+	logCli  *report.CollectService
+)
+
 type httpHandler struct {
 	router  *chain.Router
 	md      metadata
@@ -64,7 +69,7 @@ func (h *httpHandler) Init(md md.Metadata) error {
 	}
 	// 初始化日志上报
 	if len(h.md.LogServiceAddr) != 0 {
-		h.cli = report.NewReportService(2048, 5, h.md.LogServiceAddr)
+		h.cli = report.GetReportService(h.md.LogServiceAddr)
 	}
 	return nil
 }
@@ -113,12 +118,20 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 	})
 	logMsg := utils.GetLogMsg(ctx)
 	defer func() {
-		if logMsg.ErrCode != proxyv1.LogErrCode_LOG_ERR_CODE_OK && logMsg.ErrCode != proxyv1.LogErrCode_LOG_ERR_CODE_IGNORE {
-			logMsg.EndTime = time.Now().UnixMilli()
-			logMsg.Duration = int32(logMsg.EndTime - logMsg.StartTime)
-			h.recordLog(logMsg)
-			log.Infof("http:%+v", logMsg)
+		if logMsg.ErrCode == proxyv1.LogErrCode_LOG_ERR_CODE_OK {
+			return
 		}
+		if logMsg.ErrCode == proxyv1.LogErrCode_LOG_ERR_CODE_IGNORE {
+			if logMsg.UserId > 0 {
+				logMsg.ErrCode = proxyv1.LogErrCode_LOG_ERR_CODE_TARGET
+			} else {
+				return
+			}
+		}
+		logMsg.EndTime = time.Now().UnixMilli()
+		logMsg.Duration = int32(logMsg.EndTime - logMsg.StartTime)
+		h.recordLog(logMsg)
+		log.Infof("http:%+v", logMsg)
 	}()
 	if !req.URL.IsAbs() && govalidator.IsDNSName(req.Host) {
 		req.URL.Scheme = "http"
