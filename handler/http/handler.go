@@ -157,6 +157,7 @@ func (h *httpHandler) handleRequest(ctx context.Context, conn net.Conn, req *htt
 		}
 	}
 	req.Header.Del("X-Gost-Target")
+	req.Header.Del("X-Forwarded-For")
 
 	addr := req.Host
 	if _, port, _ := net.SplitHostPort(addr); port == "" {
