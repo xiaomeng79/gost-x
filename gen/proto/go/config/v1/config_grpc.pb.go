@@ -24,6 +24,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ConfigServiceClient interface {
+	// 获取vps认证信息
+	GetVpsAuth(ctx context.Context, in *v1.HostInfo, opts ...grpc.CallOption) (*v1.Auth, error)
 	// 获取最新的配置
 	GetSetting(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*v1.Setting, error)
 	// 获取最新客户端信息
@@ -48,6 +50,15 @@ type configServiceClient struct {
 
 func NewConfigServiceClient(cc grpc.ClientConnInterface) ConfigServiceClient {
 	return &configServiceClient{cc}
+}
+
+func (c *configServiceClient) GetVpsAuth(ctx context.Context, in *v1.HostInfo, opts ...grpc.CallOption) (*v1.Auth, error) {
+	out := new(v1.Auth)
+	err := c.cc.Invoke(ctx, "/config.v1.ConfigService/GetVpsAuth", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *configServiceClient) GetSetting(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*v1.Setting, error) {
@@ -126,6 +137,8 @@ func (c *configServiceClient) SetHeartbeat(ctx context.Context, in *v1.VpsHeartb
 // All implementations should embed UnimplementedConfigServiceServer
 // for forward compatibility
 type ConfigServiceServer interface {
+	// 获取vps认证信息
+	GetVpsAuth(context.Context, *v1.HostInfo) (*v1.Auth, error)
 	// 获取最新的配置
 	GetSetting(context.Context, *emptypb.Empty) (*v1.Setting, error)
 	// 获取最新客户端信息
@@ -148,6 +161,9 @@ type ConfigServiceServer interface {
 type UnimplementedConfigServiceServer struct {
 }
 
+func (UnimplementedConfigServiceServer) GetVpsAuth(context.Context, *v1.HostInfo) (*v1.Auth, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVpsAuth not implemented")
+}
 func (UnimplementedConfigServiceServer) GetSetting(context.Context, *emptypb.Empty) (*v1.Setting, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSetting not implemented")
 }
@@ -182,6 +198,24 @@ type UnsafeConfigServiceServer interface {
 
 func RegisterConfigServiceServer(s grpc.ServiceRegistrar, srv ConfigServiceServer) {
 	s.RegisterService(&ConfigService_ServiceDesc, srv)
+}
+
+func _ConfigService_GetVpsAuth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(v1.HostInfo)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConfigServiceServer).GetVpsAuth(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/config.v1.ConfigService/GetVpsAuth",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConfigServiceServer).GetVpsAuth(ctx, req.(*v1.HostInfo))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _ConfigService_GetSetting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -335,6 +369,10 @@ var ConfigService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "config.v1.ConfigService",
 	HandlerType: (*ConfigServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetVpsAuth",
+			Handler:    _ConfigService_GetVpsAuth_Handler,
+		},
 		{
 			MethodName: "GetSetting",
 			Handler:    _ConfigService_GetSetting_Handler,
