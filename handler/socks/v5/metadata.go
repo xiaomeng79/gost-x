@@ -34,7 +34,7 @@ func (h *socks5Handler) parseMetadata(md mdata.Metadata) (err error) {
 	h.md.readTimeout = mdutil.GetDuration(md, readTimeout)
 	h.md.noTLS = mdutil.GetBool(md, noTLS)
 	h.md.enableBind = mdutil.GetBool(md, enableBind)
-	h.md.enableUDP = true
+	h.md.enableUDP = mdutil.GetBool(md, enableUDP)
 
 	if bs := mdutil.GetInt(md, udpBufferSize); bs > 0 {
 		h.md.udpBufferSize = int(math.Min(math.Max(float64(bs), 512), 64*1024))
